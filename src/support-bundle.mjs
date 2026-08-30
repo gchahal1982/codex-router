@@ -37,6 +37,7 @@ import {
   readProviderCredentialStore,
   redactCredentialText,
 } from "./provider-credential-store.mjs";
+import { providerAccountCredentialPath } from "./provider-accounts.mjs";
 
 function runJson(script, args = []) {
   const result = spawnSync(
@@ -110,11 +111,14 @@ function knownLocalSecrets() {
     }
   }
   for (const entry of readProviderCredentialStore().credentials) {
-    if (entry.providerType !== "generic") continue;
     try {
-      files.push(genericProviderCredentialPath(entry.providerId));
+      if (entry.providerType === "generic") {
+        files.push(genericProviderCredentialPath(entry.providerId));
+      } else if (entry.secretRef?.type === "account-file") {
+        files.push(providerAccountCredentialPath(entry.id));
+      }
     } catch {
-      // Invalid generic metadata is already ignored by the fail-closed store reader.
+      // Invalid metadata is already ignored by the fail-closed store reader.
     }
   }
   for (const target of files) {

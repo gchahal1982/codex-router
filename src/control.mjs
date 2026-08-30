@@ -403,7 +403,8 @@ async function emitProbeSet(provider, desired) {
 async function routerCatalogSnapshot() {
   const { canonicalProviderId, readProviderSelection, selectedConfiguredListedModels } =
     await import("./provider-selection.mjs");
-  const { CHECKED_IN_MODELS } = await import("./model-registry.mjs");
+  const { CHECKED_IN_MODELS, PROVIDERS } = await import("./model-registry.mjs");
+  const { providerAccountsSnapshot } = await import("./provider-accounts.mjs");
   const { modelPickerSnapshot } = await import("./model-picker-state.mjs");
   const { subagentSettingsSnapshot } = await import("./multi-agent-state.mjs");
   const { applySubagentProofs } = await import("./subagent-proofs.mjs");
@@ -445,12 +446,26 @@ async function routerCatalogSnapshot() {
     ...(Number.isFinite(model.contextWindow) ? { contextWindow: model.contextWindow } : {}),
     ...(Array.isArray(model.inputModalities) ? { inputModalities: model.inputModalities } : {}),
   }));
+  const enabled = new Set(readProviderSelection().map((id) => canonicalProviderId(id)));
+  const providerAccounts = [];
+  const seenAccountProviders = new Set();
+  for (const provider of PROVIDERS.values()) {
+    const providerId = canonicalProviderId(provider.id);
+    if (
+      seenAccountProviders.has(providerId) || !enabled.has(providerId) ||
+      provider.kind !== "openai-compatible" || !provider.credential ||
+      ["anonymous", "per-model"].includes(provider.authMode)
+    ) continue;
+    seenAccountProviders.add(providerId);
+    try { providerAccounts.push(providerAccountsSnapshot(provider)); } catch {}
+  }
   return {
     source: "codex-router",
     configured: existsSync(PROVIDER_SELECTION_PATH),
     enabledProviders: readProviderSelection(),
     models,
     knownModels,
+    providerAccounts,
     picker,
     subagents: settings,
     dashboard: routerDashboardState({ models }),
@@ -744,6 +759,38 @@ async function deleteProviderCredential(providerId) {
   process.stdout.write(
     `${JSON.stringify({ ...providerOnboardingSnapshot(), removal })}\n`,
   );
+}
+
+async function handleProviderAccounts(providerId, command = "list", accountId) {
+  if (!providerId) throw new Error("Usage: control provider-accounts <provider> <list|add|prefer|pause|resume|remove> [account-id]");
+  const accounts = await import("./provider-accounts.mjs");
+  let result;
+  if (command === "add") {
+    result = {
+      added: accounts.addProviderAccount(providerId, {
+        value: await readSecretFromStdin(),
+        label: optionValue("--label"),
+        plan: optionValue("--plan"),
+        preferred: args.includes("--preferred"),
+      }),
+    };
+  } else if (command === "prefer") {
+    if (!accountId) throw new Error("An account id is required.");
+    result = accounts.setPreferredProviderAccount(providerId, accountId);
+  } else if (command === "pause" || command === "resume") {
+    if (!accountId) throw new Error("An account id is required.");
+    result = accounts.setProviderAccountState(
+      providerId,
+      accountId,
+      command === "pause" ? "paused" : "active",
+    );
+  } else if (command === "remove") {
+    if (!accountId) throw new Error("An account id is required.");
+    result = { removed: accounts.removeProviderAccount(providerId, accountId) };
+  } else if (command !== "list") {
+    throw new Error("Unknown provider account command.");
+  }
+  process.stdout.write(`${JSON.stringify({ ...result, accounts: accounts.providerAccountsSnapshot(providerId) })}\n`);
 }
 
 async function setLoginFreeMode(desired) {
@@ -2811,6 +2858,8 @@ if (args.includes("--probe")) {
   } else {
     await saveProviderCredential(args[1]);
   }
+} else if (args[0] === "provider-accounts") {
+  await handleProviderAccounts(args[1], args[2] || "list", args[3]);
 } else if (args[0] === "auth-mode") {
   await setLoginFreeMode(args[1]);
 } else if (args[0] === "signed-routing") {

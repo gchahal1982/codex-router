@@ -73,6 +73,42 @@ If compatible authentication already exists, an agent can finish everything
 except the final app restart. Provider credentials are entered only through a
 hidden local terminal prompt.
 
+## Multiple accounts and sticky fallback
+
+API-key providers can keep more than one account (except Command Code's
+provider-specific direct coding-plan relay). The default policy is
+`sticky-fallback`: a new conversation starts on the preferred account, changes
+accounts only after a quota, rate-limit, or transport failure, and then stays
+on the working account for the rest of that conversation. Authentication,
+entitlement, content-policy, and malformed-request errors do not trigger a
+silent account switch. If every account is unavailable, the router's existing
+cross-model failover policy still receives the final provider failure.
+
+In the desktop Control Center, open **Models**, select a connected API
+provider, and choose **Accounts**. Additional credentials are stored as
+separate owner-only files; the account list and Control Center snapshot contain
+only labels, state, plan text, and opaque IDs. The current `provider-key`
+credential remains the preferred default until you choose another account.
+
+The equivalent read-only and management commands are:
+
+```sh
+./bin/model-router codex provider-accounts deepseek list
+./bin/model-router codex provider-accounts deepseek prefer default
+./bin/model-router codex provider-accounts deepseek pause cred_ID
+./bin/model-router codex provider-accounts deepseek resume cred_ID
+./bin/model-router codex provider-accounts deepseek remove cred_ID
+```
+
+Adding an account through the CLI accepts the secret only on standard input;
+it is never accepted in argv. Prefer the Control Center's password field or a
+secret manager that can write directly to stdin:
+
+```sh
+secret-manager read deepseek-backup |
+  ./bin/model-router codex provider-accounts deepseek add --label "Team backup" --plan "Pro"
+```
+
 ## Other installation methods
 
 ### Homebrew (macOS or Linux)

@@ -51,6 +51,13 @@ import {
   createResponsesStreamTransform,
   normalizeOpenAIRequest,
 } from "./openai-adapters.mjs";
+import {
+  classifyProviderAccountResponse,
+  classifyProviderAccountTransportError,
+  coolProviderAccount,
+  rememberProviderAccount,
+  selectProviderAccountCandidates,
+} from "./provider-accounts.mjs";
 
 installStableFetchTransport();
 
@@ -1038,8 +1045,11 @@ async function handleRequest(request, response) {
   // Resolved against the endpoint, not the provider: a per-model endpoint keeps
   // its credential under its own slug, so two custom models on two hosts never
   // share a key and one missing key never blocks the other model.
-  const credential = resolveProviderCredential(normalized.endpoint);
-  if (!credential) {
+  const conversationId = typeof request.headers["x-codex-router-conversation"] === "string"
+    ? request.headers["x-codex-router-conversation"].slice(0, 128)
+    : "";
+  const accountCandidates = selectProviderAccountCandidates(normalized.endpoint, conversationId);
+  if (!accountCandidates.length) {
     const setup = credentialStatus(normalized.endpoint).setup;
     const credentialType = credentialLabel(normalized.endpoint);
     const label = credentialType === "API key" ? "key" : credentialType.toLowerCase();
@@ -1060,6 +1070,8 @@ async function handleRequest(request, response) {
     });
     return;
   }
+  let selectedAccount = accountCandidates[0];
+  let credential = selectedAccount.credential;
 
   const controller = new AbortController();
   request.once("aborted", () => controller.abort());
@@ -1109,53 +1121,83 @@ async function handleRequest(request, response) {
   const upstreamBody = normalized.provider.authProfile === "github-copilot"
     ? normalized.body.toString("utf8")
     : normalized.body;
-  let session = await upstreamSession(
-    normalized.provider,
-    credential,
-    normalized.payload,
-    {},
-    normalized.endpoint,
-  );
-  let target = `${session.baseUrl}${route}${requestUrl.search}`;
-  let upstream = await fetch(target, {
-    method: request.method,
-    headers: upstreamHeaders(
-      request.headers,
-      upstreamBody,
-      session.apiKey,
-      normalized.provider,
-      session.headers,
-      normalized.endpoint,
-    ),
-    body: upstreamBody,
-    signal: controller.signal,
-  });
-  // Account routing can change with plan or policy. Re-resolve and replay once
-  // before any response byte reaches the caller; every other status is relayed.
-  if (normalized.provider.authProfile === "github-copilot" && upstream.status === 401) {
-    await upstream.body?.cancel().catch(() => undefined);
-    session = await upstreamSession(
-      normalized.provider,
-      credential,
-      normalized.payload,
-      { force: true },
-      normalized.endpoint,
-    );
-    target = `${session.baseUrl}${route}${requestUrl.search}`;
-    upstream = await fetch(target, {
-      method: request.method,
-      headers: upstreamHeaders(
-        request.headers,
-        upstreamBody,
-        session.apiKey,
+  let upstream;
+  let lastTransportError;
+  for (let index = 0; index < accountCandidates.length; index += 1) {
+    selectedAccount = accountCandidates[index];
+    credential = selectedAccount.credential;
+    let session;
+    let target;
+    try {
+      session = await upstreamSession(
         normalized.provider,
-        session.headers,
+        credential,
+        normalized.payload,
+        {},
         normalized.endpoint,
-      ),
-      body: upstreamBody,
-      signal: controller.signal,
-    });
+      );
+      target = `${session.baseUrl}${route}${requestUrl.search}`;
+      upstream = await fetch(target, {
+        method: request.method,
+        headers: upstreamHeaders(
+          request.headers,
+          upstreamBody,
+          session.apiKey,
+          normalized.provider,
+          session.headers,
+          normalized.endpoint,
+        ),
+        body: upstreamBody,
+        signal: controller.signal,
+      });
+      // Account routing can change with plan or policy. Re-resolve and replay once
+      // before any response byte reaches the caller; every other status is relayed.
+      if (normalized.provider.authProfile === "github-copilot" && upstream.status === 401) {
+        await upstream.body?.cancel().catch(() => undefined);
+        session = await upstreamSession(
+          normalized.provider,
+          credential,
+          normalized.payload,
+          { force: true },
+          normalized.endpoint,
+        );
+        target = `${session.baseUrl}${route}${requestUrl.search}`;
+        upstream = await fetch(target, {
+          method: request.method,
+          headers: upstreamHeaders(
+            request.headers,
+            upstreamBody,
+            session.apiKey,
+            normalized.provider,
+            session.headers,
+            normalized.endpoint,
+          ),
+          body: upstreamBody,
+          signal: controller.signal,
+        });
+      }
+    } catch (error) {
+      const failure = classifyProviderAccountTransportError(error, controller.signal);
+      if (!failure.recoverable || index === accountCandidates.length - 1) throw error;
+      coolProviderAccount(normalized.provider, selectedAccount.id, failure.until);
+      lastTransportError = error;
+      continue;
+    }
+    const failure = await classifyProviderAccountResponse(upstream);
+    if (failure.recoverable && index < accountCandidates.length - 1) {
+      await upstream.body?.cancel().catch(() => undefined);
+      coolProviderAccount(normalized.provider, selectedAccount.id, failure.until);
+      upstream = undefined;
+      continue;
+    }
+    if (failure.recoverable) {
+      coolProviderAccount(normalized.provider, selectedAccount.id, failure.until);
+    } else {
+      rememberProviderAccount(normalized.provider, conversationId, selectedAccount.id);
+    }
+    break;
   }
+  if (!upstream) throw lastTransportError || new Error("No provider account could serve the request.");
   // Falling back here is legal for the same reason the Copilot replay above
   // is: nothing has been relayed yet. The refusal is read rather than piped
   // because only its body distinguishes "this plan has no API access" from

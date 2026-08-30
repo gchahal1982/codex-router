@@ -19,6 +19,7 @@ import {
   GENERIC_PROVIDER_CREDENTIALS_DIR,
   LEGACY_STATE_DIRS,
   ROUTER_PLANE_TARGET,
+  PROVIDER_ACCOUNT_CREDENTIALS_DIR,
   STATE_DIR,
   TARGET,
 } from "./paths.mjs";
@@ -291,6 +292,22 @@ export function resolveProviderCredentialReference(providerOrId, secretRef) {
   if (type === "provider-file") {
     if (secretRef.service !== undefined || secretRef.name !== undefined) return undefined;
     return configuredProviderFileCredential(provider);
+  }
+  if (type === "account-file") {
+    if (secretRef.service !== undefined) return undefined;
+    const name = typeof secretRef.name === "string" ? secretRef.name.trim() : "";
+    if (!/^cred_[A-Za-z0-9_-]{16,64}$/.test(name)) return undefined;
+    const accountProvider = {
+      ...provider,
+      credential: {
+        ...provider.credential,
+        file: path.relative(STATE_DIR, path.join(PROVIDER_ACCOUNT_CREDENTIALS_DIR, `${name}.key`)),
+        legacyFiles: [],
+        environment: [],
+        keychainServices: [],
+      },
+    };
+    return configuredProviderFileCredential(accountProvider);
   }
   if (type === "environment") {
     if (secretRef.service !== undefined) return undefined;

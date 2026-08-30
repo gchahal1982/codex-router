@@ -90,6 +90,16 @@ export function renderLiteLlmConfig() {
       "      RateLimitErrorRetries: 0",
     ]),
     "",
+    // Forward the router's opaque conversation-affinity header through the
+    // gateway. LiteLLM forwards only x-* headers for these model groups; the
+    // internal Authorization header is deliberately not eligible.
+    "model_group_settings:",
+    "  forward_client_headers_to_llm_api:",
+    ...MODELS.filter((model) => {
+      const provider = providerForModel(model);
+      return provider.kind === "openai-compatible" && !provider.keyless;
+    }).map((model) => `    - ${yamlString(model.gatewayModel)}`),
+    "",
     "general_settings:",
     "  disable_spend_logs: true",
     "",

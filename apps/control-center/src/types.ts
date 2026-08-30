@@ -288,10 +288,27 @@ export interface RouterCatalogSnapshot {
   models: RouterModel[];
   /** Safe checked-in inventory; never implies that a route is publishable. */
   knownModels?: RouterKnownModel[];
+  providerAccounts?: ProviderAccountsSnapshot[];
   picker: { hidden: string[]; visible?: string[]; hasExplicitVisibility?: boolean; path?: string };
   subagents: SubagentSettings;
   /** Metadata-only route dashboard. No credentials, endpoints, or sessions. */
   dashboard?: RouterDashboardSnapshot;
+}
+
+export interface ProviderAccountEntry {
+  id: string;
+  label: string;
+  plan: string | null;
+  state: "active" | "paused" | "missing" | string;
+  preferred: boolean;
+  source: string | null;
+}
+
+export interface ProviderAccountsSnapshot {
+  providerId: string;
+  policy: "sticky-fallback" | string;
+  preferred: string;
+  accounts: ProviderAccountEntry[];
 }
 
 export interface ProviderSetup {
@@ -620,6 +637,7 @@ export interface RouterControlApi {
   getChatGptSession(): Promise<ChatGptSessionStatus>;
   getHealth(): Promise<RouterHealth>;
   getProviders(): Promise<ProviderSetupSnapshot>;
+  getProviderAccounts(provider: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   discoverProviderModels(provider: string, options?: { refresh?: boolean }): Promise<ProviderCatalog>;
   getAccountUsage(): Promise<AccountUsage>;
   getProviderUsage(): Promise<ProviderUsageSnapshot>;
@@ -637,6 +655,10 @@ export interface RouterControlApi {
   connectProvider(provider: string): Promise<unknown>;
   saveProviderCredential(provider: string, credential: string): Promise<unknown>;
   removeProviderCredential(provider: string): Promise<unknown>;
+  addProviderAccount(provider: string, credential: string, label: string, plan?: string, preferred?: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  setPreferredProviderAccount(provider: string, accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  setProviderAccountPaused(provider: string, accountId: string, paused: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  removeProviderAccount(provider: string, accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   setSubagentMode(mode: "all" | "selected" | "proven"): Promise<unknown>;
   setSubagentModel(slug: string, enabled: boolean): Promise<unknown>;
   setSubagentEffort(slug: string, effort: string): Promise<unknown>;

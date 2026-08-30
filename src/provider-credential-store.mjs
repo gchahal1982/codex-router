@@ -34,6 +34,7 @@ export const PROVIDER_CREDENTIAL_SCHEMA_VERSION = 2;
 export const PROVIDER_CREDENTIAL_KINDS = Object.freeze(["account", "api_key"]);
 export const SECRET_REFERENCE_TYPES = Object.freeze([
   "provider-file",
+  "account-file",
   "keychain",
   "environment",
 ]);
@@ -285,7 +286,16 @@ function normalizeSecretRef(value, providerId, { legacy = false, providerType } 
   }
   const provider = PROVIDERS.get(referenceProviderId);
   if (!provider?.credential) throw new Error(`Provider ${referenceProviderId} has no credential policy.`);
-  if (type === "keychain") {
+  if (type === "account-file") {
+    if (value.service !== undefined) {
+      throw new Error("account-file secretRef cannot include service.");
+    }
+    const name = normalizeText(value.name, "secretRef.name", { max: 80, required: true });
+    if (!CREDENTIAL_ID.test(name)) {
+      throw new Error("account-file secretRef.name must be an opaque credential id.");
+    }
+    normalized.name = name;
+  } else if (type === "keychain") {
     const service = normalizeText(value.service, "secretRef.service", { max: 200, required: true });
     if (!provider.credential.keychainServices?.includes(service)) {
       throw new Error("secretRef.service is not configured for this provider.");

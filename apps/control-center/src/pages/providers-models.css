@@ -294,6 +294,35 @@
   margin: 0;
 }
 
+.pm-account-list {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+}
+
+.pm-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.pm-account-row strong,
+.pm-account-row small {
+  display: block;
+}
+
+.pm-account-row strong { color: var(--ink-strong); font-size: 11px; }
+.pm-account-row small { margin-top: 2px; color: var(--ink-subtle); font-size: 9px; }
+.pm-account-actions { display: flex; gap: 4px; }
+.pm-account-form { padding-top: 12px; border-top: 1px solid var(--line); }
+.pm-account-form > strong { color: var(--ink-strong); font-size: 11px; }
+.pm-account-preferred { display: flex; align-items: center; gap: 6px; }
+
 .pm-model-toolbar {
   flex-wrap: wrap;
 }

@@ -72,6 +72,7 @@ export interface RouterControl {
   getChatGptSession(): Promise<ChatGptSessionStatus>;
   getHealth(): Promise<unknown>;
   getProviders(): Promise<unknown>;
+  getProviderAccounts(provider: string): Promise<unknown>;
   discoverProviderModels(provider: string, options?: { refresh?: boolean }): Promise<unknown>;
   getAccountUsage(): Promise<unknown>;
   getProviderUsage(): Promise<unknown>;
@@ -88,6 +89,10 @@ export interface RouterControl {
   connectProvider(provider: string): Promise<unknown>;
   saveProviderCredential(provider: string, credential: string): Promise<unknown>;
   removeProviderCredential(provider: string): Promise<unknown>;
+  addProviderAccount(provider: string, credential: string, label: string, plan?: string, preferred?: boolean): Promise<unknown>;
+  setPreferredProviderAccount(provider: string, accountId: string): Promise<unknown>;
+  setProviderAccountPaused(provider: string, accountId: string, paused: boolean): Promise<unknown>;
+  removeProviderAccount(provider: string, accountId: string): Promise<unknown>;
   setSubagentMode(mode: SubagentMode): Promise<unknown>;
   setSubagentModel(slug: string, enabled: boolean): Promise<unknown>;
   setSubagentEffort(slug: string, effort: string): Promise<unknown>;

@@ -20,6 +20,7 @@ import { useOptimisticValues, type RunAction } from "../useOptimisticValues";
 import type {
   ModelViewFocusRequest,
   ProviderCatalog,
+  ProviderAccountsSnapshot,
   ProviderSetup,
   ProviderSetupSnapshot,
   ProviderUsageSnapshot,
@@ -158,6 +159,7 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
   const [loadingConnectedCatalogs, setLoadingConnectedCatalogs] = useState(false);
   const [credentialProvider, setCredentialProvider] = useState<ProviderSetup | null>(null);
   const [removeProvider, setRemoveProvider] = useState<ProviderSetup | null>(null);
+  const [accountProvider, setAccountProvider] = useState<ProviderSetup | null>(null);
   const [catalogStates, setCatalogStates] = useState<Record<string, CatalogViewState>>({});
   const catalogRequestGenerations = useRef<Record<string, number>>({});
   // Slugs committed to the picker but not yet published, per provider. Adding
@@ -206,6 +208,10 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
   const usageById = useMemo(
     () => new Map((usage?.providers ?? []).map((provider) => [provider.id, provider])),
     [usage?.providers],
+  );
+  const accountsById = useMemo(
+    () => new Map((catalog?.providerAccounts ?? []).map((pool) => [pool.providerId, pool])),
+    [catalog?.providerAccounts],
   );
   const directory = useMemo<ProviderDirectoryEntry[]>(() => {
     const entries = new Map<string, ProviderDirectoryEntry>();
@@ -552,6 +558,7 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
           directory={directory}
           enabledProviders={enabledProviders}
           usageById={usageById}
+          accountsById={accountsById}
           apiAvailable={Boolean(api)}
           platform={api?.platform}
           openProviderId={managedProviderId}
@@ -570,6 +577,7 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
           }}
           onKey={(entry) => entry.setup && setCredentialProvider(entry.setup)}
           onRemove={(entry) => entry.setup && setRemoveProvider(entry.setup)}
+          onAccounts={(entry) => entry.setup && setAccountProvider(entry.setup)}
         />
 
         <section className="panel-section pm-model-catalog" id="model-catalog-controls">
@@ -757,6 +765,13 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
           : Promise.resolve()}
         onClose={() => setCredentialProvider(null)}
       />
+      <ProviderAccountsDialog
+        provider={accountProvider}
+        snapshot={accountProvider ? accountsById.get(accountProvider.id) : undefined}
+        api={api}
+        runAction={runAction}
+        onClose={() => setAccountProvider(null)}
+      />
       <Dialog open={Boolean(removeProvider)} title="Disconnect provider" description="The provider is withdrawn from installed clients before its managed credential is deleted." onClose={() => setRemoveProvider(null)}>
         <div className="pm-credential-warning"><ShieldCheck aria-hidden size={17} strokeWidth={1.7} /><p>If a credential also exists in the environment or Keychain, the router will still report it as connected.</p></div>
         <div className="dialog-actions">
@@ -772,6 +787,7 @@ function ConnectionsBar({
   directory,
   enabledProviders,
   usageById,
+  accountsById,
   apiAvailable,
   platform,
   openProviderId,
@@ -784,10 +800,12 @@ function ConnectionsBar({
   onSignIn,
   onKey,
   onRemove,
+  onAccounts,
 }: {
   directory: ProviderDirectoryEntry[];
   enabledProviders: Set<string>;
   usageById: Map<string, NonNullable<ProviderUsageSnapshot["providers"]>[number]>;
+  accountsById: Map<string, ProviderAccountsSnapshot>;
   apiAvailable: boolean;
   platform?: string;
   openProviderId: string | null;
@@ -800,6 +818,7 @@ function ConnectionsBar({
   onSignIn: (entry: ProviderDirectoryEntry) => void;
   onKey: (entry: ProviderDirectoryEntry) => void;
   onRemove: (entry: ProviderDirectoryEntry) => void;
+  onAccounts: (entry: ProviderDirectoryEntry) => void;
 }) {
   const barRef = useRef<HTMLElement | null>(null);
   const setConnectMenuOpen = onConnectMenuOpen;
@@ -851,6 +870,7 @@ function ConnectionsBar({
               <ProviderMenu
                 entry={entry}
                 usage={usageById.get(entry.id)}
+                accounts={accountsById.get(entry.id)}
                 apiAvailable={apiAvailable}
                 platform={platform}
                 enabled={isEnabled(entry)}
@@ -858,6 +878,7 @@ function ConnectionsBar({
                 onSignIn={() => onSignIn(entry)}
                 onKey={() => onKey(entry)}
                 onRemove={() => onRemove(entry)}
+                onAccounts={() => onAccounts(entry)}
               />
             ) : null}
           </div>
@@ -907,6 +928,7 @@ function ConnectionsBar({
 function ProviderMenu({
   entry,
   usage,
+  accounts,
   apiAvailable,
   platform,
   enabled,
@@ -914,9 +936,11 @@ function ProviderMenu({
   onSignIn,
   onKey,
   onRemove,
+  onAccounts,
 }: {
   entry: ProviderDirectoryEntry;
   usage?: NonNullable<ProviderUsageSnapshot["providers"]>[number];
+  accounts?: ProviderAccountsSnapshot;
   apiAvailable: boolean;
   platform?: string;
   enabled: boolean;
@@ -924,6 +948,7 @@ function ProviderMenu({
   onSignIn: () => void;
   onKey: () => void;
   onRemove: () => void;
+  onAccounts: () => void;
 }) {
   const setup = entry.setup;
   return (
@@ -939,6 +964,7 @@ function ProviderMenu({
         {setup?.planNote || connectionDetail(entry, usage?.account?.status, usage?.account?.message, platform === "darwin")}
       </p>
       {usage?.requests ? <small className="pm-connection-menu-usage">{usage.requests} {usage.requests === 1 ? "request" : "requests"} so far</small> : null}
+      {accounts ? <small className="pm-connection-menu-usage">Sticky fallback · {accounts.accounts.filter((account) => account.state === "active").length} active account{accounts.accounts.filter((account) => account.state === "active").length === 1 ? "" : "s"}</small> : null}
       {setup ? (
         <>
           <label className="pm-connection-menu-enable">
@@ -965,6 +991,11 @@ function ProviderMenu({
             {setup.kind === "api" && entry.id !== "local" ? (
               <Button variant="ghost" disabled={!apiAvailable} onClick={onKey}>
                 <KeyRound aria-hidden size={14} strokeWidth={1.7} /> {setup.configured ? "Replace key" : "Add key"}
+              </Button>
+            ) : null}
+            {setup.kind === "api" && setup.configured && entry.id !== "local" ? (
+              <Button variant="ghost" disabled={!apiAvailable} onClick={onAccounts}>
+                <ShieldCheck aria-hidden size={14} strokeWidth={1.7} /> Accounts
               </Button>
             ) : null}
             {setup.kind === "api" && setup.configured && entry.id !== "local" ? (
@@ -1626,6 +1657,100 @@ function CredentialDialog({ provider, onSave, onClose }: { provider: ProviderSet
         <input id="provider-credential" type="password" value={credential} onChange={(event) => setCredential(event.target.value)} autoComplete="off" spellCheck={false} placeholder="Enter credential" autoFocus />
         <p><Link2 aria-hidden size={13} strokeWidth={1.7} /> The value is not placed in logs, command arguments, localStorage, or saved renderer state.</p>
         <div className="dialog-actions"><Button type="button" variant="secondary" onClick={close}>Cancel</Button><Button type="submit" variant="primary" disabled={!credential.trim()}>Save credential</Button></div>
+      </form>
+    </Dialog>
+  );
+}
+
+function ProviderAccountsDialog({
+  provider,
+  snapshot,
+  api,
+  runAction,
+  onClose,
+}: {
+  provider: ProviderSetup | null;
+  snapshot?: ProviderAccountsSnapshot;
+  api?: RouterControlApi;
+  runAction: RunAction;
+  onClose: () => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [plan, setPlan] = useState("");
+  const [credential, setCredential] = useState("");
+  const [preferred, setPreferred] = useState(false);
+
+  const close = () => {
+    setLabel("");
+    setPlan("");
+    setCredential("");
+    setPreferred(false);
+    onClose();
+  };
+  const mutate = (name: string, action: () => Promise<unknown>) => {
+    if (!provider || !api) return;
+    void runAction(`${name} ${provider.displayName} account`, action);
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!provider || !api || !label.trim() || !credential.trim()) return;
+    const secret = credential;
+    const accountLabel = label;
+    const accountPlan = plan;
+    setCredential("");
+    setLabel("");
+    setPlan("");
+    mutate("Add", () => api.addProviderAccount(
+      provider.id,
+      secret,
+      accountLabel,
+      accountPlan || undefined,
+      preferred,
+    ));
+    setPreferred(false);
+  };
+
+  return (
+    <Dialog
+      open={Boolean(provider)}
+      title={`${provider?.displayName || "Provider"} accounts`}
+      description="Sticky fallback starts with the preferred account, switches only for quota, rate-limit, or transport failure, then keeps that conversation on the working account."
+      onClose={close}
+    >
+      <div className="pm-account-list" role="list">
+        {(snapshot?.accounts ?? []).map((account) => (
+          <div className="pm-account-row" role="listitem" key={account.id}>
+            <div>
+              <strong>{account.label}</strong>
+              <small>{account.preferred ? "Preferred · " : ""}{account.state}{account.plan ? ` · ${account.plan}` : ""}</small>
+            </div>
+            <div className="pm-account-actions">
+              {!account.preferred && account.state === "active" ? (
+                <Button variant="ghost" disabled={!api} onClick={() => mutate("Prefer", () => api!.setPreferredProviderAccount(provider!.id, account.id))}>Prefer</Button>
+              ) : null}
+              {account.id !== "default" ? (
+                <>
+                  <Button variant="ghost" disabled={!api} onClick={() => mutate(account.state === "paused" ? "Resume" : "Pause", () => api!.setProviderAccountPaused(provider!.id, account.id, account.state !== "paused"))}>
+                    {account.state === "paused" ? "Resume" : "Pause"}
+                  </Button>
+                  <Button variant="ghost" disabled={!api} onClick={() => mutate("Remove", () => api!.removeProviderAccount(provider!.id, account.id))}>Remove</Button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+      <form className="pm-credential-form pm-account-form" onSubmit={submit}>
+        <strong>Add fallback account</strong>
+        <label htmlFor="provider-account-label">Account label</label>
+        <input id="provider-account-label" value={label} onChange={(event) => setLabel(event.target.value)} autoComplete="off" maxLength={160} placeholder="e.g. Team backup" />
+        <label htmlFor="provider-account-plan">Plan (optional)</label>
+        <input id="provider-account-plan" value={plan} onChange={(event) => setPlan(event.target.value)} autoComplete="off" maxLength={80} placeholder="e.g. Pro" />
+        <label htmlFor="provider-account-credential">{provider?.credentialLabel || "API key"}</label>
+        <input id="provider-account-credential" type="password" value={credential} onChange={(event) => setCredential(event.target.value)} autoComplete="off" spellCheck={false} placeholder="Enter credential" />
+        <label className="pm-account-preferred"><input type="checkbox" checked={preferred} onChange={(event) => setPreferred(event.target.checked)} /> Make this the preferred account</label>
+        <p><Link2 aria-hidden size={13} strokeWidth={1.7} /> Each credential is stored separately in protected local storage and never added to command arguments.</p>
+        <div className="dialog-actions"><Button type="button" variant="secondary" onClick={close}>Close</Button><Button type="submit" variant="primary" disabled={!api || !label.trim() || !credential.trim()}>Add account</Button></div>
       </form>
     </Dialog>
   );

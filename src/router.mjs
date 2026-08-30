@@ -702,12 +702,23 @@ function normalizeNativePromptCacheCompatibility(payload) {
   return payload;
 }
 
-function routedHeaders() {
+function routedConversationId(request) {
+  const threadId = request ? threadIdFromHeaders(request.headers) : undefined;
+  if (!threadId) return undefined;
+  return createHash("sha256")
+    .update(`codex-router-conversation:${threadId}`)
+    .digest("base64url")
+    .slice(0, 43);
+}
+
+function routedHeaders(request) {
+  const conversationId = routedConversationId(request);
   return {
     Authorization: `Bearer ${INTERNAL_KEY}`,
     "Content-Type": "application/json",
     "Accept-Encoding": "identity",
     "User-Agent": `codex-router/${VERSION}`,
+    ...(conversationId ? { "X-Codex-Router-Conversation": conversationId } : {}),
   };
 }
 
@@ -2228,7 +2239,7 @@ async function summarizeWith(request, payload, route, aged, prepared, signal) {
   const serialized = JSON.stringify(body);
   const upstream = await fetch(`${GATEWAY_BASE}/responses`, {
     method: "POST",
-    headers: routedHeaders(),
+    headers: routedHeaders(request),
     body: serialized,
     signal,
   });
@@ -2873,7 +2884,7 @@ async function buildRoutedRequest({ request, payload, route, agedInput, tokenMax
   return {
     body: Buffer.from(JSON.stringify(routed), "utf8"),
     target: `${GATEWAY_BASE}/responses`,
-    headers: routedHeaders(),
+    headers: routedHeaders(request),
     namespacesFlattened,
     flattenedNamespaces,
     // Close finished children the parent left Working. Only when the

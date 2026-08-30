@@ -142,6 +142,15 @@ export const MIGRATIONS_DIR = path.join(STATE_DIR, "migrations");
 export const PROVIDER_CREDENTIAL_STORE_PATH =
   process.env.MODEL_ROUTER_PROVIDER_CREDENTIAL_STORE ||
   path.join(STATE_DIR, "provider-credentials.json");
+// Additional credentials used by sticky account fallback. The metadata store
+// above contains only an opaque credential id; each secret lives in its own
+// 0600 file below this 0700 directory.
+export const PROVIDER_ACCOUNT_CREDENTIALS_DIR =
+  process.env.MODEL_ROUTER_PROVIDER_ACCOUNT_CREDENTIALS_DIR ||
+  path.join(STATE_DIR, "provider-account-credentials");
+export const PROVIDER_ACCOUNT_POLICY_PATH =
+  process.env.MODEL_ROUTER_PROVIDER_ACCOUNT_POLICY ||
+  path.join(STATE_DIR, "provider-account-policy.json");
 export const PROVIDER_CREDENTIAL_MIGRATIONS_DIR =
   process.env.MODEL_ROUTER_PROVIDER_CREDENTIAL_MIGRATIONS ||
   path.join(MIGRATIONS_DIR, "provider-credentials");

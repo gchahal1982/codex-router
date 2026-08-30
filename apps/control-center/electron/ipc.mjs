@@ -695,6 +695,10 @@ export function registerIpcHandlers({
     return { opened: true };
   }, { requiresCompatibleRouter: false });
   handle("getProviders", async () => runJson(["providers"]));
+  handle("getProviderAccounts", async ({ providerId } = {}) => {
+    const { id } = await validateProvider(providerId, "credential");
+    return runJson(["provider-accounts", id, "list"]);
+  });
   handle("discoverProviderModels", async ({ providerId, refresh = false } = {}) => {
     const { id } = await validateCatalogProvider(providerId);
     if (typeof refresh !== "boolean") throw new Error("refresh must be boolean.");
@@ -857,6 +861,40 @@ export function registerIpcHandlers({
     return runJson(["credential", id, "--remove"], {
       timeoutMs: CATALOG_MUTATION_TIMEOUT_MS,
     });
+  });
+  handleAction("addProviderAccount", async ({ providerId, credential, label, plan, preferred = false } = {}) => {
+    const { id } = await validateProvider(providerId, "credential");
+    if (typeof credential !== "string" || !credential.trim() || credential.length > 16 * 1024) {
+      throw new Error("Credential is invalid.");
+    }
+    if (typeof label !== "string" || !label.trim() || label.length > 160) {
+      throw new Error("Account label is invalid.");
+    }
+    if (plan !== undefined && (typeof plan !== "string" || plan.length > 80)) {
+      throw new Error("Account plan is invalid.");
+    }
+    if (typeof preferred !== "boolean") throw new Error("preferred must be boolean.");
+    return runJson([
+      "provider-accounts", id, "add", "--label", label.trim(),
+      ...(plan?.trim() ? ["--plan", plan.trim()] : []),
+      ...(preferred ? ["--preferred"] : []),
+    ], { stdin: credential });
+  });
+  handleAction("setPreferredProviderAccount", async ({ providerId, accountId } = {}) => {
+    const { id } = await validateProvider(providerId, "credential");
+    const selected = stringValue(accountId, "Account", /^(?:default|cred_[A-Za-z0-9_-]{16,64})$/);
+    return runJson(["provider-accounts", id, "prefer", selected]);
+  });
+  handleAction("setProviderAccountPaused", async ({ providerId, accountId, paused = true } = {}) => {
+    const { id } = await validateProvider(providerId, "credential");
+    const selected = stringValue(accountId, "Account", /^cred_[A-Za-z0-9_-]{16,64}$/);
+    if (typeof paused !== "boolean") throw new Error("paused must be boolean.");
+    return runJson(["provider-accounts", id, paused ? "pause" : "resume", selected]);
+  });
+  handleAction("removeProviderAccount", async ({ providerId, accountId } = {}) => {
+    const { id } = await validateProvider(providerId, "credential");
+    const selected = stringValue(accountId, "Account", /^cred_[A-Za-z0-9_-]{16,64}$/);
+    return runJson(["provider-accounts", id, "remove", selected]);
   });
 
   handleAction("setSubagentMode", async ({ mode } = {}) => {

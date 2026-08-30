@@ -11,6 +11,7 @@ const routerControl = Object.freeze({
   getChatGptSession: () => call("getChatGptSession"),
   getHealth: () => call("getHealth"),
   getProviders: () => call("getProviders"),
+  getProviderAccounts: (providerId) => call("getProviderAccounts", { providerId }),
   discoverProviderModels: (providerId, options) =>
     call("discoverProviderModels", { providerId, refresh: Boolean(options?.refresh) }),
   getAccountUsage: () => call("getAccountUsage"),
@@ -29,6 +30,14 @@ const routerControl = Object.freeze({
   connectProvider: (providerId) => call("connectProvider", { providerId }),
   saveProviderCredential: (providerId, credential) => call("saveProviderCredential", { providerId, credential }),
   removeProviderCredential: (providerId) => call("removeProviderCredential", { providerId }),
+  addProviderAccount: (providerId, credential, label, plan, preferred = false) =>
+    call("addProviderAccount", { providerId, credential, label, plan, preferred }),
+  setPreferredProviderAccount: (providerId, accountId) =>
+    call("setPreferredProviderAccount", { providerId, accountId }),
+  setProviderAccountPaused: (providerId, accountId, paused) =>
+    call("setProviderAccountPaused", { providerId, accountId, paused }),
+  removeProviderAccount: (providerId, accountId) =>
+    call("removeProviderAccount", { providerId, accountId }),
   setSubagentMode: (mode) => call("setSubagentMode", { mode }),
   setSubagentModel: (slug, enabled) => call("setSubagentModel", { slug, enabled }),
   setSubagentEffort: (slug, effort) => call("setSubagentEffort", { slug, effort }),
