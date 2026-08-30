@@ -63,17 +63,11 @@ const grok = {
   multiAgentVersion: "v2",
 };
 
-test("signed-in picker overlay cannot hide Codex native base entries", () => {
+test("explicit picker hides include Codex native base entries", () => {
   const hidden = new Set(["gpt-5.6-luna", "gpt-5.6-sol-1m", "grok-oauth/grok-4.5"]);
   const native = new Set(["gpt-5.6-luna", "gpt-5.6-sol"]);
   assert.deepEqual(
     [...effectivePickerHiddenModels(hidden, native)].sort(),
-    ["gpt-5.6-sol-1m", "grok-oauth/grok-4.5"],
-  );
-  // Login-free aliases deliberately reuse native slugs, so the router policy
-  // applies to every entry in that mode.
-  assert.deepEqual(
-    [...effectivePickerHiddenModels(hidden, native, { loginFree: true })].sort(),
     [...hidden].sort(),
   );
 });
