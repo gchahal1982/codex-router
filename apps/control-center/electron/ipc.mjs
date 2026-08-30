@@ -699,6 +699,7 @@ export function registerIpcHandlers({
     const { id } = await validateProvider(providerId, "credential");
     return runJson(["provider-accounts", id, "list"]);
   });
+  handle("getChatGptAccounts", async () => runJson(["chatgpt-accounts", "list"]));
   handle("discoverProviderModels", async ({ providerId, refresh = false } = {}) => {
     const { id } = await validateCatalogProvider(providerId);
     if (typeof refresh !== "boolean") throw new Error("refresh must be boolean.");
@@ -895,6 +896,37 @@ export function registerIpcHandlers({
     const { id } = await validateProvider(providerId, "credential");
     const selected = stringValue(accountId, "Account", /^cred_[A-Za-z0-9_-]{16,64}$/);
     return runJson(["provider-accounts", id, "remove", selected]);
+  });
+  handleAction("addChatGptAccount", async ({ label, preferred = false } = {}) => {
+    if (typeof label !== "string" || !label.trim() || label.length > 160) {
+      throw new Error("ChatGPT account label is invalid.");
+    }
+    if (typeof preferred !== "boolean") throw new Error("preferred must be boolean.");
+    return runJson([
+      "chatgpt-accounts", "add", "--label", label.trim(),
+      ...(preferred ? ["--preferred"] : []),
+    ], { timeoutMs: 10 * 60_000 });
+  });
+  handleAction("setPreferredChatGptAccount", async ({ accountId } = {}) => {
+    const selected = stringValue(accountId, "ChatGPT account", /^(?:default|chatgpt_[A-Za-z0-9_-]{16,64})$/);
+    return runJson(["chatgpt-accounts", "prefer", selected]);
+  });
+  handleAction("setChatGptAccountPaused", async ({ accountId, paused = true } = {}) => {
+    const selected = stringValue(accountId, "ChatGPT account", /^chatgpt_[A-Za-z0-9_-]{16,64}$/);
+    if (typeof paused !== "boolean") throw new Error("paused must be boolean.");
+    return runJson(["chatgpt-accounts", paused ? "pause" : "resume", selected]);
+  });
+  handleAction("removeChatGptAccount", async ({ accountId } = {}) => {
+    const selected = stringValue(accountId, "ChatGPT account", /^chatgpt_[A-Za-z0-9_-]{16,64}$/);
+    return runJson(["chatgpt-accounts", "remove", selected]);
+  });
+  handleAction("refreshChatGptAccount", async ({ accountId } = {}) => {
+    const selected = stringValue(accountId, "ChatGPT account", /^chatgpt_[A-Za-z0-9_-]{16,64}$/);
+    return runJson(["chatgpt-accounts", "refresh", selected], { timeoutMs: 45_000 });
+  });
+  handleAction("loginChatGptAccount", async ({ accountId } = {}) => {
+    const selected = stringValue(accountId, "ChatGPT account", /^chatgpt_[A-Za-z0-9_-]{16,64}$/);
+    return runJson(["chatgpt-accounts", "login", selected], { timeoutMs: 10 * 60_000 });
   });
 
   handleAction("setSubagentMode", async ({ mode } = {}) => {

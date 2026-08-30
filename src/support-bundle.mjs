@@ -38,6 +38,7 @@ import {
   redactCredentialText,
 } from "./provider-credential-store.mjs";
 import { providerAccountCredentialPath } from "./provider-accounts.mjs";
+import { chatGptAccountAuthPaths } from "./chatgpt-accounts.mjs";
 
 function runJson(script, args = []) {
   const result = spawnSync(
@@ -142,6 +143,23 @@ function knownLocalSecrets() {
     } catch {
       // An invalid credential is reported by doctor; never copy it into a
       // support bundle merely to discover whether it contains a secret.
+    }
+  }
+  // Native ChatGPT profiles contain multiple OAuth token classes. Read them
+  // only into the redaction set; neither their paths nor their contents are
+  // projected into the bundle.
+  for (const authPath of chatGptAccountAuthPaths()) {
+    const contents = privateText(authPath);
+    if (contents === undefined) continue;
+    try {
+      const auth = JSON.parse(contents);
+      for (const field of ["access_token", "refresh_token", "id_token"]) {
+        const value = auth?.tokens?.[field];
+        if (typeof value === "string" && value.trim()) values.add(value.trim());
+      }
+    } catch {
+      // Doctor reports malformed auth independently; redaction stays best
+      // effort without ever copying the malformed document into the bundle.
     }
   }
   return [...values].filter((value) => value.length >= 8);

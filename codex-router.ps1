@@ -13,7 +13,7 @@ $Command = if ($args.Count) { [string]$args[0] } else { "status" }
 # failed with "Unknown tray action 's'".
 $Arguments = @(if ($args.Count -gt 1) { $args[1..($args.Count - 1)] })
 $Commands = @(
-  "setup", "install", "doctor", "status", "providers", "provider-key", "provider-accounts", "enable",
+  "setup", "install", "doctor", "status", "providers", "provider-key", "provider-accounts", "chatgpt-accounts", "enable",
   "disable", "chatgpt-session", "skills", "uninstall", "update", "rollback", "support-bundle",
   "smoke-test", "start", "stop", "test-model", "discover-models", "local-mlx",
   "signed-routing", "refresh-catalog", "media", "tray", "panel", "companion"
@@ -859,6 +859,7 @@ switch ($Command) {
   "providers" { Invoke-RouterNode "src\providers.mjs" $Arguments }
   "provider-key" { Invoke-RouterNode "src\provider-key.mjs" $Arguments }
   "provider-accounts" { Invoke-RouterNode "src\provider-accounts-cli.mjs" $Arguments }
+  "chatgpt-accounts" { Invoke-RouterNode "src\chatgpt-accounts-cli.mjs" $Arguments }
   "chatgpt-session" { Invoke-RouterNode "src\chatgpt-session.mjs" $Arguments }
   "skills" { Invoke-RouterNode "src\skills-install.mjs" $Arguments }
   # `bin/install` accepts --prepare-only/--migrate-known/--force-deps, so the

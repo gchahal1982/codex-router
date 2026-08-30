@@ -151,6 +151,16 @@ export const PROVIDER_ACCOUNT_CREDENTIALS_DIR =
 export const PROVIDER_ACCOUNT_POLICY_PATH =
   process.env.MODEL_ROUTER_PROVIDER_ACCOUNT_POLICY ||
   path.join(STATE_DIR, "provider-account-policy.json");
+// Native ChatGPT/Codex subscriptions are OAuth sessions rather than API keys.
+// Every additional login gets an isolated Codex home so the official CLI owns
+// refresh-token rotation without ever overwriting the user's active
+// `$CODEX_HOME/auth.json` session.
+export const CHATGPT_ACCOUNTS_DIR =
+  process.env.MODEL_ROUTER_CHATGPT_ACCOUNTS_DIR ||
+  path.join(STATE_DIR, "chatgpt-accounts");
+export const CHATGPT_ACCOUNT_POLICY_PATH =
+  process.env.MODEL_ROUTER_CHATGPT_ACCOUNT_POLICY ||
+  path.join(STATE_DIR, "chatgpt-account-policy.json");
 export const PROVIDER_CREDENTIAL_MIGRATIONS_DIR =
   process.env.MODEL_ROUTER_PROVIDER_CREDENTIAL_MIGRATIONS ||
   path.join(MIGRATIONS_DIR, "provider-credentials");

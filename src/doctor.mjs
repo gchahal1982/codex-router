@@ -1089,6 +1089,25 @@ try {
   // Never let a diagnostic be the thing that fails the doctor.
 }
 
+try {
+  const { chatGptAccountsHealth } = await import("./chatgpt-accounts.mjs");
+  const pool = chatGptAccountsHealth();
+  if (pool.configured) {
+    add(
+      !pool.safe ? "fail" : pool.usable < pool.active ? "warn" : "ok",
+      "ChatGPT subscription pool",
+      !pool.safe
+        ? pool.problems.join("; ")
+        : `${pool.usable} usable of ${pool.active} active account${pool.active === 1 ? "" : "s"}; sticky fallback`,
+      !pool.safe
+        ? "Repair the protected ChatGPT account state before using the pool."
+        : "Open Codex Router > Models > OpenAI native > Accounts and refresh or pause unavailable logins.",
+    );
+  }
+} catch {
+  // Account-pool diagnostics are additive and must not hide the core report.
+}
+
 const followsHostApps = serviceFollowsHostApps();
 let serviceLoaded = false;
 let serviceStoppedByDesign = false;

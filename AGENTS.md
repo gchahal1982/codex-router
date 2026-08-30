@@ -946,12 +946,14 @@ the turn as text. Treat it as a router capability, never as a model capability.
    backend the router already talks to on every native turn. That is the whole
    justification. These conditions are what keep it from widening into
    something else, and each one is load-bearing:
-   - **No new credential, ever.** A native engine carries the caller's session
-     and nothing else: the fixed `FORWARD_HEADERS` allowlist, copied from the
-     request in hand and sent only to the hardcoded `NATIVE_BASE`. The router
-     must never store, cache, mint, or read a credential for this path, and the
-     gateway's internal key must never travel to that backend. An engine that
-     would need a key the router does not already hold is not this exception.
+   - **No implicit credential, ever.** A native engine normally carries the
+     caller's session. When the operator has explicitly added isolated
+     ChatGPT subscription profiles, `chatgpt-accounts.mjs` may substitute the
+     conversation's selected profile under the same fixed `FORWARD_HEADERS`
+     allowlist and only to the hardcoded `NATIVE_BASE`. The router never mints
+     an OAuth credential, and its caller/internal keys must never travel to
+     that backend. A caller with no upstream session still needs the existing
+     explicit shared-session consent before any stored profile is eligible.
    - **Fail closed when there is no caller session.** No session on the request
      means no native engine: not a candidate, and a pin naming one does not
      resolve. Never fall back to the gateway for a native slug — it holds no
@@ -1885,10 +1887,13 @@ the same OS user to sign in or authorize once per harness buys nothing.
   headless opt-in, while `0` is an emergency off switch. No other value is
   consent.
 
-- **Fallback, never override.** Injection happens only when the request carried
-  no *upstream* credential. Codex always carries one, so a Codex turn is
-  byte-identical to before — verified by relaying a deliberately invalid token
-  and getting that token's own 401 back rather than a success.
+- **Fallback by default; explicit pool selection may override.** Without a
+  configured ChatGPT account pool, injection happens only when the request
+  carried no *upstream* credential and Codex traffic remains byte-identical.
+  Once the operator adds an isolated subscription profile, native turns may
+  replace Codex's account headers with the preferred or conversation-sticky
+  profile. A 401 still never moves to another subscription: the official Codex
+  binary may refresh the same isolated profile once, then that 401 is relayed.
 - **"No credential" is not "no header".** The harness authenticates to this
   router with the router's own caller key, sent as a bearer token, because a
   provider route has nowhere else to put one. Testing `!headers.authorization`
@@ -1928,15 +1933,66 @@ the same OS user to sign in or authorize once per harness buys nothing.
   and declines two minutes early, so an expired session withholds the headers
   and `dshRoutedModels()` stops publishing native models — the picker loses the
   eight rather than serving certain 401s.
-- **Codex refreshes its own credential; this router never does.** Reproducing
+- **Codex refreshes every credential; this router never performs OAuth.** Reproducing
   that OAuth exchange would mean guessing an unpublished client identity and, if
   refresh tokens rotate, either rewriting Codex's own file or invalidating the
   login this router was asked not to disturb. `refreshViaCodex()` runs
   `codex login status` instead — best effort, single-flight, at most once every
   five minutes — and lets Codex decide. If nothing renews, the session simply
-  reads as expired.
+  reads as expired. Additional subscription profiles follow the same rule in
+  their isolated `CODEX_HOME`: the router invokes the official binary and
+  reads the resulting owner-only `auth.json`, but never implements the token
+  exchange itself.
 - `doctor` reports it as its own line, because "open Codex once" is the fix and
   nothing else would say so.
+
+## Native ChatGPT subscription account pools
+
+`src/chatgpt-accounts.mjs` is the explicit exception that lets one Codex
+installation use several ChatGPT subscriptions. The active Codex login remains
+the implicit `default`; every additional account is created by the official
+`codex login` browser flow under an isolated owner-only Codex home inside the
+router state directory.
+
+1. **Never copy or replace the active login.** Adding an account must set
+   `CODEX_HOME` for the official child before login and must not run `codex
+   logout`. A failed, cancelled, duplicate, or wrong-account login removes or
+   restores only the newly isolated profile. The user's `~/.codex/auth.json`
+   stays byte-identical.
+2. **OAuth remains official.** The router may read access/account identifiers
+   from an isolated profile to construct the native headers, but it never asks
+   for a token, accepts one over IPC/argv/stdin, implements refresh-token
+   exchange, or exposes token values. Refresh and re-login invoke the official
+   Codex binary in that same profile; a re-login that resolves to another
+   account fingerprint restores the prior credential.
+3. **Consent still gates local callers.** A pool does not by itself widen the
+   router caller capability. Candidate selection begins only after the request
+   carried its own upstream ChatGPT authorization or
+   `nativeSessionHeaders()` supplied the explicitly shared session. Under
+   discovery-disabled mode no account policy, profile, auth file, or login
+   probe is read and every mutation is refused.
+4. **Sticky fallback is pre-relay and narrow.** Candidate order is the
+   conversation's in-memory affinity, then the preferred account, then the
+   remaining active profiles. Move only on 402/429, a quota-bearing 403/503,
+   a retryable native edge status, or a transport failure, and only before a
+   response byte is relayed. A 401 refreshes/retries that same isolated profile
+   once and never spends another subscription. Ordinary 4xx, content-policy,
+   entitlement, and malformed-request errors stay on the selected account.
+5. **Potentially billed auxiliary calls are stricter.** Image generation and
+   similar native auxiliary endpoints may move after an explicit quota or
+   rate-limit response, but never after an ambiguous transport failure or edge
+   5xx that could have billed the first account.
+6. **Secrets and identity stay bounded.** Profile and policy directories are
+   0700 and files 0600 on POSIX; paths cannot escape router state or traverse a
+   symlink. Metadata stores only an opaque local id, label, state, timestamps,
+   and a SHA-256 account fingerprint. Status, doctor, Control Center IPC, logs,
+   and support bundles contain no account id or OAuth token; support-bundle
+   redaction scans valid isolated auth files even when policy metadata is
+   malformed.
+7. **Bound memory and fanout.** At most twenty additional subscriptions are
+   accepted. Affinity is memory-only, capped at 5,000 conversations, and
+   expires after seven days. A paused, missing, unsafe, expired, or duplicate
+   profile is never a request candidate.
 
 ## A client the tray cannot watch keeps the router on
 

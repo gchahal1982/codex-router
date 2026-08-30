@@ -405,6 +405,7 @@ async function routerCatalogSnapshot() {
     await import("./provider-selection.mjs");
   const { CHECKED_IN_MODELS, PROVIDERS } = await import("./model-registry.mjs");
   const { providerAccountsSnapshot } = await import("./provider-accounts.mjs");
+  const { chatGptAccountsSnapshot } = await import("./chatgpt-accounts.mjs");
   const { modelPickerSnapshot } = await import("./model-picker-state.mjs");
   const { subagentSettingsSnapshot } = await import("./multi-agent-state.mjs");
   const { applySubagentProofs } = await import("./subagent-proofs.mjs");
@@ -466,6 +467,7 @@ async function routerCatalogSnapshot() {
     models,
     knownModels,
     providerAccounts,
+    chatgptAccounts: chatGptAccountsSnapshot(),
     picker,
     subagents: settings,
     dashboard: routerDashboardState({ models }),
@@ -791,6 +793,40 @@ async function handleProviderAccounts(providerId, command = "list", accountId) {
     throw new Error("Unknown provider account command.");
   }
   process.stdout.write(`${JSON.stringify({ ...result, accounts: accounts.providerAccountsSnapshot(providerId) })}\n`);
+}
+
+async function handleChatGptAccounts(command = "list", accountId) {
+  const accounts = await import("./chatgpt-accounts.mjs");
+  let result;
+  if (command === "add") {
+    result = {
+      added: accounts.addChatGptAccount({
+        label: optionValue("--label"),
+        preferred: args.includes("--preferred"),
+      }),
+    };
+  } else if (command === "prefer") {
+    if (!accountId) throw new Error("A ChatGPT account id is required.");
+    result = accounts.setPreferredChatGptAccount(accountId);
+  } else if (command === "pause" || command === "resume") {
+    if (!accountId) throw new Error("A ChatGPT account id is required.");
+    result = accounts.setChatGptAccountState(
+      accountId,
+      command === "pause" ? "paused" : "active",
+    );
+  } else if (command === "remove") {
+    if (!accountId) throw new Error("A ChatGPT account id is required.");
+    result = { removed: accounts.removeChatGptAccount(accountId) };
+  } else if (command === "refresh") {
+    if (!accountId) throw new Error("A ChatGPT account id is required.");
+    result = { refreshed: await accounts.refreshChatGptAccount(accountId) };
+  } else if (command === "login") {
+    if (!accountId) throw new Error("A ChatGPT account id is required.");
+    result = { login: accounts.reloginChatGptAccount(accountId) };
+  } else if (command !== "list") {
+    throw new Error("Unknown ChatGPT account command.");
+  }
+  process.stdout.write(`${JSON.stringify({ ...result, accounts: accounts.chatGptAccountsSnapshot() })}\n`);
 }
 
 async function setLoginFreeMode(desired) {
@@ -2860,6 +2896,8 @@ if (args.includes("--probe")) {
   }
 } else if (args[0] === "provider-accounts") {
   await handleProviderAccounts(args[1], args[2] || "list", args[3]);
+} else if (args[0] === "chatgpt-accounts") {
+  await handleChatGptAccounts(args[1] || "list", args[2]);
 } else if (args[0] === "auth-mode") {
   await setLoginFreeMode(args[1]);
 } else if (args[0] === "signed-routing") {

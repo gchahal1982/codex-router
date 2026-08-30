@@ -158,6 +158,15 @@ import {
 } from "./tool-result-aging-state.mjs";
 import { VERSION } from "./version.mjs";
 import { nativeSessionHeaders } from "./codex-native-session.mjs";
+import { classifyProviderAccountResponse } from "./provider-accounts.mjs";
+import {
+  classifyChatGptAccountResponse,
+  chatGptTransportFailure,
+  coolChatGptAccount,
+  refreshChatGptAccount,
+  rememberChatGptAccount,
+  selectChatGptAccountCandidates,
+} from "./chatgpt-accounts.mjs";
 import {
   installStableFetchTransport,
   loopbackProbeFetch,
@@ -561,7 +570,7 @@ async function compressedNativeBody(body, headers) {
   }
 }
 
-function nativeHeaders(request) {
+function callerNativeHeaders(request) {
   const headers = {
     "Content-Type": "application/json",
     "Accept-Encoding": "identity",
@@ -598,6 +607,16 @@ function nativeHeaders(request) {
     }
   }
   return headers;
+}
+
+function nativeAccountCandidates(request) {
+  const headers = callerNativeHeaders(request);
+  const candidates = selectChatGptAccountCandidates(headers, routedConversationId(request));
+  return candidates.length ? candidates : [{ id: "default", headers }];
+}
+
+function nativeHeaders(request) {
+  return nativeAccountCandidates(request)[0].headers;
 }
 
 // The token out of an `Authorization: Bearer <token>` header, or undefined for
@@ -3226,6 +3245,8 @@ async function handleResponses(request, response, requestUrl) {
     let target;
     let headers;
     let routedBody;
+    let chatGptCandidates;
+    let selectedChatGptAccount;
     let namespacesFlattened = false;
     let flattenedNamespaces = new Map();
     // The route-independent half of the input, computed once. Failing the turn
@@ -3381,7 +3402,9 @@ async function handleResponses(request, response, requestUrl) {
         normalizeNativeForSubstitutedCaller(native, { compact: compactV1 });
       }
       target = nativeTarget(requestUrl.pathname);
-      headers = nativeHeaders(request);
+      chatGptCandidates = nativeAccountCandidates(request);
+      selectedChatGptAccount = chatGptCandidates[0];
+      headers = selectedChatGptAccount.headers;
       routedBody = await compressedNativeBody(
         Buffer.from(JSON.stringify(native), "utf8"),
         headers,
@@ -3394,24 +3417,112 @@ async function handleResponses(request, response, requestUrl) {
     // attempt replays the identical bytes under the identical encoding. Nothing
     // here consumes a stream, which is what makes the request replayable at
     // all.
-    let { response: upstream, retries } = await fetchWithRetry(
-      target,
-      {
-        method: "POST",
-        headers,
-        body: routedBody,
-        signal: controller.signal,
-      },
-      {
-        // Routed traffic terminates at the local gateway, which has its own
-        // error translation and Retry-After handling below; leave it exactly
-        // as it was.
-        retries: route ? 0 : undefined,
-        canRetry: () => nothingRelayed(response),
-        onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
-      },
-    );
-    upstreamRetries = retries;
+    let upstream;
+    if (route) {
+      const attempt = await fetchWithRetry(
+        target,
+        {
+          method: "POST",
+          headers,
+          body: routedBody,
+          signal: controller.signal,
+        },
+        {
+          // Routed traffic terminates at the local gateway, which has its own
+          // error translation and Retry-After handling below; leave it exactly
+          // as it was.
+          retries: 0,
+          canRetry: () => nothingRelayed(response),
+          onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
+        },
+      );
+      upstream = attempt.response;
+      upstreamRetries = attempt.retries;
+    } else {
+      let lastTransportError;
+      upstreamRetries = 0;
+      for (let index = 0; index < chatGptCandidates.length; index += 1) {
+        selectedChatGptAccount = chatGptCandidates[index];
+        headers = selectedChatGptAccount.headers;
+        if (index > 0 && chatGptCandidates[0].headers["Content-Encoding"]) {
+          headers["Content-Encoding"] = chatGptCandidates[0].headers["Content-Encoding"];
+        }
+        let attempt;
+        try {
+          attempt = await fetchWithRetry(
+            target,
+            {
+              method: "POST",
+              headers,
+              body: routedBody,
+              signal: controller.signal,
+            },
+            {
+              retries: undefined,
+              canRetry: () => nothingRelayed(response),
+              onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
+            },
+          );
+          upstreamRetries += attempt.retries;
+          upstream = attempt.response;
+        } catch (error) {
+          const failure = chatGptTransportFailure(controller.signal, error);
+          if (!failure.recoverable) throw error;
+          coolChatGptAccount(selectedChatGptAccount.id, failure.until);
+          if (index === chatGptCandidates.length - 1) throw error;
+          lastTransportError = error;
+          continue;
+        }
+
+        // An OAuth access token can expire independently of subscription
+        // quota. Let the official Codex binary refresh that same isolated
+        // profile and replay it once; a persistent 401 is relayed and never
+        // treated as permission to spend another subscription.
+        if (upstream.status === 401 && selectedChatGptAccount.id !== "default") {
+          if (await refreshChatGptAccount(selectedChatGptAccount.id)) {
+            const refreshed = nativeAccountCandidates(request)
+              .find((candidate) => candidate.id === selectedChatGptAccount.id);
+            if (refreshed) {
+              await upstream.body?.cancel().catch(() => undefined);
+              selectedChatGptAccount = refreshed;
+              headers = refreshed.headers;
+              if (chatGptCandidates[0].headers["Content-Encoding"]) {
+                headers["Content-Encoding"] = chatGptCandidates[0].headers["Content-Encoding"];
+              }
+              attempt = await fetchWithRetry(
+                target,
+                { method: "POST", headers, body: routedBody, signal: controller.signal },
+                {
+                  retries: undefined,
+                  canRetry: () => nothingRelayed(response),
+                  onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
+                },
+              );
+              upstreamRetries += attempt.retries;
+              upstream = attempt.response;
+            }
+          }
+        }
+
+        const failure = await classifyChatGptAccountResponse(upstream);
+        if (failure.recoverable && index < chatGptCandidates.length - 1) {
+          await upstream.body?.cancel().catch(() => undefined);
+          coolChatGptAccount(selectedChatGptAccount.id, failure.until);
+          upstream = undefined;
+          continue;
+        }
+        if (failure.recoverable) {
+          coolChatGptAccount(selectedChatGptAccount.id, failure.until);
+        } else {
+          rememberChatGptAccount(
+            routedConversationId(request),
+            selectedChatGptAccount.id,
+          );
+        }
+        break;
+      }
+      if (!upstream) throw lastTransportError || new Error("No ChatGPT account could serve the request.");
+    }
     upstreamStatus = upstream.status;
     // Time until the upstream chain answered the request. Everything before
     // this is router-side work (body read, normalization, flattening, vision
@@ -4106,7 +4217,9 @@ async function handleNativeRequest(request, response, requestUrl, defaultModel) 
       writeIdleNoProviderError(response);
       return;
     }
-    const headers = nativeHeaders(request);
+    const chatGptCandidates = nativeAccountCandidates(request);
+    let selectedChatGptAccount = chatGptCandidates[0];
+    let headers = selectedChatGptAccount.headers;
     if (!hasNativeSession(headers)) {
       writeJson(response, 401, {
         error: {
@@ -4141,28 +4254,61 @@ async function handleNativeRequest(request, response, requestUrl, defaultModel) 
     // Same replayable-Buffer rule as the turn path: encode once, outside the
     // retry, so every attempt carries identical bytes under identical headers.
     const imageBody = await compressedNativeBody(outgoing, headers);
-    const { response: upstream, retries: upstreamRetries } = await fetchWithRetry(
-      nativeTarget(requestUrl.pathname, nativeRequestSearch(requestUrl)),
-      {
-        method: "POST",
-        headers,
-        body: imageBody,
-        signal: controller.signal,
-      },
-      {
-        // Images do not retry. The retryable statuses were chosen to mean "no
-        // response was obtained", but that is reasoning rather than something
-        // observable from here, and Cloudflare can emit 520 after reaching the
-        // origin. On a turn a wrong guess costs a duplicated request; on an
-        // image generation it costs the operator a second billed image. The
-        // failure this exists to absorb was reported on /v1/responses, so the
-        // turn path keeps the benefit and the billed path keeps the old
-        // behaviour until a captured 5xx proves it is safe.
-        retries: 0,
-        canRetry: () => nothingRelayed(response),
-        onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
-      },
-    );
+    let upstream;
+    let upstreamRetries = 0;
+    for (let index = 0; index < chatGptCandidates.length; index += 1) {
+      selectedChatGptAccount = chatGptCandidates[index];
+      headers = selectedChatGptAccount.headers;
+      if (chatGptCandidates[0].headers["Content-Encoding"]) {
+        headers["Content-Encoding"] = chatGptCandidates[0].headers["Content-Encoding"];
+      }
+      const attempt = await fetchWithRetry(
+        nativeTarget(requestUrl.pathname, nativeRequestSearch(requestUrl)),
+        { method: "POST", headers, body: imageBody, signal: controller.signal },
+        {
+          // Images do not transport-retry or transport-fail over: absence of a
+          // response does not prove the first account was not billed. An
+          // explicit quota/rate-limit response is safe to move before bytes
+          // are relayed and is the only multi-account retry allowed here.
+          retries: 0,
+          canRetry: () => nothingRelayed(response),
+          onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
+        },
+      );
+      upstreamRetries += attempt.retries;
+      upstream = attempt.response;
+      if (upstream.status === 401 && selectedChatGptAccount.id !== "default") {
+        if (await refreshChatGptAccount(selectedChatGptAccount.id)) {
+          const refreshed = nativeAccountCandidates(request)
+            .find((candidate) => candidate.id === selectedChatGptAccount.id);
+          if (refreshed) {
+            await upstream.body?.cancel().catch(() => undefined);
+            selectedChatGptAccount = refreshed;
+            headers = refreshed.headers;
+            if (chatGptCandidates[0].headers["Content-Encoding"]) {
+              headers["Content-Encoding"] = chatGptCandidates[0].headers["Content-Encoding"];
+            }
+            const replay = await fetchWithRetry(
+              nativeTarget(requestUrl.pathname, nativeRequestSearch(requestUrl)),
+              { method: "POST", headers, body: imageBody, signal: controller.signal },
+              { retries: 0, canRetry: () => nothingRelayed(response) },
+            );
+            upstream = replay.response;
+          }
+        }
+      }
+      const failure = await classifyProviderAccountResponse(upstream);
+      if (failure.recoverable && index < chatGptCandidates.length - 1) {
+        await upstream.body?.cancel().catch(() => undefined);
+        coolChatGptAccount(selectedChatGptAccount.id, failure.until);
+        upstream = undefined;
+        continue;
+      }
+      if (failure.recoverable) coolChatGptAccount(selectedChatGptAccount.id, failure.until);
+      else rememberChatGptAccount(routedConversationId(request), selectedChatGptAccount.id);
+      break;
+    }
+    if (!upstream) throw new Error("No ChatGPT account could serve the native request.");
     await pipeResponse(upstream, response, HOP_BY_HOP_HEADERS);
     recordUsageEvent({
       model: requestedModel,

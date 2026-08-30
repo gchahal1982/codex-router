@@ -160,6 +160,7 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
   const [credentialProvider, setCredentialProvider] = useState<ProviderSetup | null>(null);
   const [removeProvider, setRemoveProvider] = useState<ProviderSetup | null>(null);
   const [accountProvider, setAccountProvider] = useState<ProviderSetup | null>(null);
+  const [chatGptAccountsOpen, setChatGptAccountsOpen] = useState(false);
   const [catalogStates, setCatalogStates] = useState<Record<string, CatalogViewState>>({});
   const catalogRequestGenerations = useRef<Record<string, number>>({});
   // Slugs committed to the picker but not yet published, per provider. Adding
@@ -210,8 +211,11 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
     [usage?.providers],
   );
   const accountsById = useMemo(
-    () => new Map((catalog?.providerAccounts ?? []).map((pool) => [pool.providerId, pool])),
-    [catalog?.providerAccounts],
+    () => new Map([
+      ...(catalog?.providerAccounts ?? []).map((pool) => [pool.providerId, pool] as const),
+      ...(catalog?.chatgptAccounts ? [["openai", catalog.chatgptAccounts] as const] : []),
+    ]),
+    [catalog?.chatgptAccounts, catalog?.providerAccounts],
   );
   const directory = useMemo<ProviderDirectoryEntry[]>(() => {
     const entries = new Map<string, ProviderDirectoryEntry>();
@@ -577,7 +581,10 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
           }}
           onKey={(entry) => entry.setup && setCredentialProvider(entry.setup)}
           onRemove={(entry) => entry.setup && setRemoveProvider(entry.setup)}
-          onAccounts={(entry) => entry.setup && setAccountProvider(entry.setup)}
+          onAccounts={(entry) => {
+            if (entry.id === "openai") setChatGptAccountsOpen(true);
+            else if (entry.setup) setAccountProvider(entry.setup);
+          }}
         />
 
         <section className="panel-section pm-model-catalog" id="model-catalog-controls">
@@ -772,6 +779,13 @@ export function ModelsPage({ target, catalog, setup, usage, api, refreshing, onR
         runAction={runAction}
         onClose={() => setAccountProvider(null)}
       />
+      <ChatGptAccountsDialog
+        open={chatGptAccountsOpen}
+        snapshot={catalog?.chatgptAccounts}
+        api={api}
+        runAction={runAction}
+        onClose={() => setChatGptAccountsOpen(false)}
+      />
       <Dialog open={Boolean(removeProvider)} title="Disconnect provider" description="The provider is withdrawn from installed clients before its managed credential is deleted." onClose={() => setRemoveProvider(null)}>
         <div className="pm-credential-warning"><ShieldCheck aria-hidden size={17} strokeWidth={1.7} /><p>If a credential also exists in the environment or Keychain, the router will still report it as connected.</p></div>
         <div className="dialog-actions">
@@ -965,7 +979,13 @@ function ProviderMenu({
       </p>
       {usage?.requests ? <small className="pm-connection-menu-usage">{usage.requests} {usage.requests === 1 ? "request" : "requests"} so far</small> : null}
       {accounts ? <small className="pm-connection-menu-usage">Sticky fallback · {accounts.accounts.filter((account) => account.state === "active").length} active account{accounts.accounts.filter((account) => account.state === "active").length === 1 ? "" : "s"}</small> : null}
-      {setup ? (
+      {entry.id === "openai" ? (
+        <div className="pm-connection-menu-actions">
+          <Button variant="ghost" disabled={!apiAvailable} onClick={onAccounts}>
+            <ShieldCheck aria-hidden size={14} strokeWidth={1.7} /> Accounts
+          </Button>
+        </div>
+      ) : setup ? (
         <>
           <label className="pm-connection-menu-enable">
             <span>Available to installed clients</span>
@@ -1751,6 +1771,89 @@ function ProviderAccountsDialog({
         <label className="pm-account-preferred"><input type="checkbox" checked={preferred} onChange={(event) => setPreferred(event.target.checked)} /> Make this the preferred account</label>
         <p><Link2 aria-hidden size={13} strokeWidth={1.7} /> Each credential is stored separately in protected local storage and never added to command arguments.</p>
         <div className="dialog-actions"><Button type="button" variant="secondary" onClick={close}>Close</Button><Button type="submit" variant="primary" disabled={!api || !label.trim() || !credential.trim()}>Add account</Button></div>
+      </form>
+    </Dialog>
+  );
+}
+
+function ChatGptAccountsDialog({
+  open,
+  snapshot,
+  api,
+  runAction,
+  onClose,
+}: {
+  open: boolean;
+  snapshot?: ProviderAccountsSnapshot;
+  api?: RouterControlApi;
+  runAction: RunAction;
+  onClose: () => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [preferred, setPreferred] = useState(false);
+
+  const mutate = (name: string, action: () => Promise<unknown>) => {
+    if (!api) return;
+    void runAction(name, action);
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!api || !label.trim()) return;
+    const accountLabel = label.trim();
+    setLabel("");
+    setPreferred(false);
+    mutate(`Add ${accountLabel} ChatGPT subscription`, () => api.addChatGptAccount(accountLabel, preferred));
+  };
+  const close = () => {
+    setLabel("");
+    setPreferred(false);
+    onClose();
+  };
+
+  return (
+    <Dialog
+      open={open}
+      title="ChatGPT subscription accounts"
+      description="New conversations start on the preferred subscription. Quota, rate-limit, or text-transport failure moves the conversation to another active subscription and keeps it there."
+      onClose={close}
+    >
+      <div className="pm-account-list" role="list">
+        {(snapshot?.accounts ?? []).map((account) => (
+          <div className="pm-account-row" role="listitem" key={account.id}>
+            <div>
+              <strong>{account.label}</strong>
+              <small>
+                {account.preferred ? "Preferred · " : ""}{account.state}
+                {account.session ? ` · ${account.session}` : ""}
+                {Number.isFinite(account.expiresInHours) ? ` · ${account.expiresInHours}h` : ""}
+              </small>
+            </div>
+            <div className="pm-account-actions">
+              {!account.preferred && account.state === "active" ? (
+                <Button variant="ghost" disabled={!api} onClick={() => mutate("Prefer ChatGPT account", () => api!.setPreferredChatGptAccount(account.id))}>Prefer</Button>
+              ) : null}
+              {account.id !== "default" ? (
+                <>
+                  {account.session !== "usable" ? (
+                    <Button variant="ghost" disabled={!api} onClick={() => mutate("Sign in to ChatGPT account", () => api!.loginChatGptAccount(account.id))}>Sign in again</Button>
+                  ) : null}
+                  <Button variant="ghost" disabled={!api} onClick={() => mutate(account.state === "paused" ? "Resume ChatGPT account" : "Pause ChatGPT account", () => api!.setChatGptAccountPaused(account.id, account.state !== "paused"))}>
+                    {account.state === "paused" ? "Resume" : "Pause"}
+                  </Button>
+                  <Button variant="ghost" disabled={!api} onClick={() => mutate("Remove ChatGPT account", () => api!.removeChatGptAccount(account.id))}>Remove</Button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+      <form className="pm-credential-form pm-account-form" onSubmit={submit}>
+        <strong>Add ChatGPT subscription</strong>
+        <p><LogIn aria-hidden size={13} strokeWidth={1.7} /> The official Codex browser login opens in an isolated profile. Select a different ChatGPT account; the current Codex login is not replaced or logged out.</p>
+        <label htmlFor="chatgpt-account-label">Account label</label>
+        <input id="chatgpt-account-label" value={label} onChange={(event) => setLabel(event.target.value)} autoComplete="off" maxLength={160} placeholder="e.g. Work subscription" />
+        <label className="pm-account-preferred"><input type="checkbox" checked={preferred} onChange={(event) => setPreferred(event.target.checked)} /> Make this the preferred subscription</label>
+        <div className="dialog-actions"><Button type="button" variant="secondary" onClick={close}>Close</Button><Button type="submit" variant="primary" disabled={!api || !label.trim()}><LogIn aria-hidden size={14} strokeWidth={1.7} /> Open official sign-in</Button></div>
       </form>
     </Dialog>
   );

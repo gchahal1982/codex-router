@@ -27,6 +27,7 @@ test("support bundle reports credential presence without including values", () =
   const copilotSentinel = "github_pat_TEST_SUPPORT_COPILOT_SECRET_MUST_NOT_APPEAR";
   const callerSentinel =
     "TEST_SUPPORT_CALLER_CAPABILITY_MUST_NOT_APPEAR_ANYWHERE";
+  const chatGptSentinel = "TEST_SUPPORT_CHATGPT_ACCESS_TOKEN_MUST_NOT_APPEAR";
   writeFileSync(path.join(stateDir, "deepseek-api-key.secret"), `${sentinel}\n`, {
     mode: 0o600,
   });
@@ -47,6 +48,12 @@ test("support bundle reports credential presence without including values", () =
   const codexHome = process.env.CODEX_HOME;
   mkdirSync(codexHome, { recursive: true, mode: 0o700 });
   writeFileSync(
+    path.join(codexHome, "auth.json"),
+    JSON.stringify({ auth_mode: "chatgpt", tokens: { access_token: chatGptSentinel, refresh_token: `${chatGptSentinel}_REFRESH`, id_token: `${chatGptSentinel}_ID`, account_id: "acct-test" } }),
+    { mode: 0o600 },
+  );
+  writeFileSync(path.join(stateDir, "router.log"), `accidental=${chatGptSentinel}\n`, { mode: 0o600 });
+  writeFileSync(
     path.join(codexHome, "config.toml"),
     `# BEGIN codex-router-managed
 openai_base_url = "http://127.0.0.1:4102/_codex-router/${callerSentinel}/v1"
@@ -57,7 +64,7 @@ model_catalog_json = ${JSON.stringify(path.join(stateDir, "merged-models.json"))
   );
 
   try {
-    const result = createSupportBundle();
+    const result = createSupportBundle({ includeLogs: true });
     const contents = readFileSync(result.path, "utf8");
     const bundle = JSON.parse(contents);
     assert.equal(bundle.credentialSources.deepseek.configured, true);
@@ -67,8 +74,9 @@ model_catalog_json = ${JSON.stringify(path.join(stateDir, "merged-models.json"))
     assert.doesNotMatch(contents, new RegExp(chutesSentinel));
     assert.doesNotMatch(contents, new RegExp(copilotSentinel));
     assert.doesNotMatch(contents, new RegExp(callerSentinel));
+    assert.doesNotMatch(contents, new RegExp(chatGptSentinel));
     assert.match(bundle.config.openai_base_url, /\[REDACTED\]/);
-    assert.equal("redactedLogTail" in bundle, false);
+    assert.match(bundle.redactedLogTail, /\[REDACTED\]/);
   } finally {
     rmSync(testRoot, { recursive: true, force: true });
   }

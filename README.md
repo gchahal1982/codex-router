@@ -75,6 +75,36 @@ hidden local terminal prompt.
 
 ## Multiple accounts and sticky fallback
 
+Native ChatGPT/Codex subscriptions have their own protected account pool. The
+existing Codex login is the implicit `default` account. Every additional
+subscription is acquired by running the official Codex browser login inside a
+new isolated Codex home, so adding one never overwrites or logs out the active
+`~/.codex/auth.json` session. The official CLI continues to own OAuth refresh
+rotation; the router never asks for, prints, or accepts an OAuth token.
+
+In the desktop Control Center, open **Models**, select **OpenAI native**, choose
+**Accounts**, enter a local label, and click **Open official sign-in**. Select a
+different ChatGPT account in the browser. The equivalent CLI commands are:
+
+```sh
+./bin/model-router codex chatgpt-accounts list
+./bin/model-router codex chatgpt-accounts add --label "Work subscription" --preferred
+./bin/model-router codex chatgpt-accounts prefer default
+./bin/model-router codex chatgpt-accounts pause chatgpt_ID
+./bin/model-router codex chatgpt-accounts resume chatgpt_ID
+./bin/model-router codex chatgpt-accounts refresh chatgpt_ID
+./bin/model-router codex chatgpt-accounts login chatgpt_ID
+./bin/model-router codex chatgpt-accounts remove chatgpt_ID
+```
+
+Do not run `codex logout` to switch subscriptions. A logout can revoke the
+refresh token backing the active profile. Use the account screen or the
+commands above; every added profile remains isolated under owner-only router
+state. Text turns switch only before any response byte reaches the client.
+Image-generation and other potentially billed native auxiliary calls may move
+after an explicit quota/rate-limit response, but never after an ambiguous
+transport failure that could duplicate a billed operation.
+
 API-key providers can keep more than one account (except Command Code's
 provider-specific direct coding-plan relay). The default policy is
 `sticky-fallback`: a new conversation starts on the preferred account, changes

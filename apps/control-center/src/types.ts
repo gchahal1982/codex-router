@@ -289,6 +289,7 @@ export interface RouterCatalogSnapshot {
   /** Safe checked-in inventory; never implies that a route is publishable. */
   knownModels?: RouterKnownModel[];
   providerAccounts?: ProviderAccountsSnapshot[];
+  chatgptAccounts?: ProviderAccountsSnapshot;
   picker: { hidden: string[]; visible?: string[]; hasExplicitVisibility?: boolean; path?: string };
   subagents: SubagentSettings;
   /** Metadata-only route dashboard. No credentials, endpoints, or sessions. */
@@ -302,6 +303,8 @@ export interface ProviderAccountEntry {
   state: "active" | "paused" | "missing" | string;
   preferred: boolean;
   source: string | null;
+  session?: "usable" | "expired" | "unavailable" | string;
+  expiresInHours?: number;
 }
 
 export interface ProviderAccountsSnapshot {
@@ -638,6 +641,7 @@ export interface RouterControlApi {
   getHealth(): Promise<RouterHealth>;
   getProviders(): Promise<ProviderSetupSnapshot>;
   getProviderAccounts(provider: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  getChatGptAccounts(): Promise<{ accounts: ProviderAccountsSnapshot }>;
   discoverProviderModels(provider: string, options?: { refresh?: boolean }): Promise<ProviderCatalog>;
   getAccountUsage(): Promise<AccountUsage>;
   getProviderUsage(): Promise<ProviderUsageSnapshot>;
@@ -659,6 +663,12 @@ export interface RouterControlApi {
   setPreferredProviderAccount(provider: string, accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   setProviderAccountPaused(provider: string, accountId: string, paused: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
   removeProviderAccount(provider: string, accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  addChatGptAccount(label: string, preferred?: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  setPreferredChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  setChatGptAccountPaused(accountId: string, paused: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  removeChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  refreshChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  loginChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   setSubagentMode(mode: "all" | "selected" | "proven"): Promise<unknown>;
   setSubagentModel(slug: string, enabled: boolean): Promise<unknown>;
   setSubagentEffort(slug: string, effort: string): Promise<unknown>;
