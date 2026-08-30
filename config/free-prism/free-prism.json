@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "providers": [
+    {
+      "id": "free-prism",
+      "displayName": "Free Prism",
+      "kind": "openai-compatible",
+      "ownedBy": "AuraOne",
+      "baseUrl": "https://freeprism.auraone.ai/v1",
+      "baseUrlEnv": "FREEPRISM_BASE_URL",
+      "credential": {
+        "environment": ["FREEPRISM_API_KEY"],
+        "file": "free-prism-api-key.secret",
+        "legacyFiles": [],
+        "keychainServices": ["codex-router-free-prism"],
+        "prompt": "Free Prism API key"
+      }
+    }
+  ]
+}

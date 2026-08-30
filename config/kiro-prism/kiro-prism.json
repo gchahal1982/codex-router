@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "providers": [
+    {
+      "id": "kiro-prism",
+      "displayName": "Kiro Prism",
+      "kind": "openai-compatible",
+      "ownedBy": "AuraOne",
+      "protocol": "openai-responses",
+      "baseUrl": "https://prism.auraone.ai/v1",
+      "baseUrlEnv": "KIRO_PRISM_BASE_URL",
+      "credential": {
+        "environment": ["PRISM_API_KEY", "KIRO_PRISM_API_KEY"],
+        "file": "kiro-prism-api-key.secret",
+        "legacyFiles": [],
+        "keychainServices": ["codex-router-kiro-prism"],
+        "prompt": "Kiro Prism API key"
+      }
+    }
+  ]
+}

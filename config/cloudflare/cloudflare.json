@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "providers": [
+    {
+      "id": "cloudflare-workers-ai",
+      "displayName": "Cloudflare Workers AI",
+      "kind": "openai-compatible",
+      "ownedBy": "Cloudflare",
+      "baseUrl": "https://api.cloudflare.com/client/v4/accounts/bd3fbe37a66521e496ea1b90f669f8b7/ai/v1",
+      "baseUrlEnv": "CLOUDFLARE_WORKERS_AI_BASE_URL",
+      "credential": {
+        "environment": ["CLOUDFLARE_API_TOKEN"],
+        "file": "cloudflare-workers-ai-api-token.secret",
+        "legacyFiles": [],
+        "keychainServices": ["codex-router-cloudflare-workers-ai"],
+        "prompt": "Cloudflare Workers AI API token"
+      }
+    }
+  ]
+}

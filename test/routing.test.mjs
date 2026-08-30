@@ -2984,6 +2984,57 @@ test("API forwarder replaces caller auth and enforces Kimi K3 API parameters", a
   }
 });
 
+test("API forwarder selects the requested Free Prism upstream family", async () => {
+  const upstreamRequests = [];
+  const upstream = await mockServer(async (request, response) => {
+    upstreamRequests.push({ headers: request.headers, body: await bodyJson(request) });
+    json(response, 200, { choices: [] });
+  });
+  const forwarderPort = await openPort();
+  const forwarder = run("api-forwarder.mjs", {
+    CODEX_ROUTER_API_PORT: String(forwarderPort),
+    FREEPRISM_BASE_URL: `http://127.0.0.1:${upstream.port}/v1`,
+    FREEPRISM_API_KEY: "TEST_FREE_PRISM_KEY",
+    CODEX_ROUTER_QUIET: "1",
+  });
+
+  try {
+    await waitFor(`http://127.0.0.1:${forwarderPort}/health`, forwarder, {
+      Authorization: `Bearer ${INTERNAL_KEY}`,
+    });
+    for (const [model, provider, thinking] of [
+      ["free-prism-minimax-m3", "Minimax", "low"],
+      ["free-prism-grok-4-5", "xAI", "max"],
+    ]) {
+      const response = await fetch(
+        `http://127.0.0.1:${forwarderPort}/v1/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${INTERNAL_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            reasoning_effort: thinking,
+            messages: [{ role: "user", content: "test" }],
+          }),
+        },
+      );
+      assert.equal(response.status, 200);
+      const request = upstreamRequests.at(-1);
+      assert.equal(request.headers.authorization, "Bearer TEST_FREE_PRISM_KEY");
+      assert.equal(request.body.provider, provider);
+      assert.equal(request.body.app, "codex-desktop");
+      assert.equal(request.body.thinking, thinking);
+      assert.equal(request.body.reasoning_effort, undefined);
+    }
+  } finally {
+    await stopChild(forwarder);
+    await closeServer(upstream.server);
+  }
+});
+
 test("API forwarder routes ClinePass with isolated auth and unchanged stream tools", async () => {
   const upstreamRequests = [];
   const upstream = await mockServer(async (request, response) => {

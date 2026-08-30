@@ -32,7 +32,13 @@ test("provider registry exposes configured API and OAuth model families", () => 
   // Order follows the deterministic sorted walk of the config/ vendor tree;
   // picker placement comes from each model's priority field, not this list.
   assert.deepEqual(
-    LISTED_MODELS.map((model) => model.slug),
+    LISTED_MODELS
+      .filter((model) => ![
+        "cloudflare-workers-ai",
+        "free-prism",
+        "kiro-prism",
+      ].includes(model.provider))
+      .map((model) => model.slug),
     [
       "anthropic-api/claude-opus-4.8",
       "antigravity-oauth/gemini-3.1-pro",
@@ -194,6 +200,19 @@ test("provider registry exposes configured API and OAuth model families", () => 
     ],
   );
   assert.equal(PROVIDERS.get("deepseek").baseUrl, "https://api.deepseek.com");
+  assert.equal(MODELS.filter((model) => model.provider === "kiro-prism").length, 28);
+  assert.equal(MODEL_BY_SLUG.get("kiro-prism/grok-4.6")?.upstreamModel, "grok-4.6");
+  assert.equal(MODEL_BY_SLUG.get("kiro-prism/kimi-k3")?.upstreamModel, "kimi-k3");
+  assert.equal(MODELS.filter((model) => model.provider === "free-prism").length, 2);
+  assert.equal(MODELS.filter((model) => model.provider === "cloudflare-workers-ai").length, 2);
+  assert.equal(PROVIDERS.get("free-prism").ownedBy, "AuraOne");
+  assert.equal(PROVIDERS.get("kiro-prism").protocol, "openai-responses");
+  assert.ok(
+    PROVIDERS.get("nousresearch").credential.legacyFiles.includes("nous-api-key.secret"),
+  );
+  assert.ok(
+    PROVIDERS.get("nousresearch").credential.keychainServices.includes("codex-router-nous-api"),
+  );
   assert.equal(
     PROVIDERS.get("qwen-plan").baseUrl,
     "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
@@ -542,7 +561,7 @@ test("provider registry exposes configured API and OAuth model families", () => 
   // flagships only; gateway variants stay conservative until each relay is
   // probed live.
   const originalDetailSlugs = MODELS.filter(
-    (model) => model.supportsImageDetailOriginal === true,
+    (model) => model.supportsImageDetailOriginal === true && model.provider !== "kiro-prism",
   ).map((model) => model.slug);
   assert.deepEqual(originalDetailSlugs.sort(), [
     "anthropic-api/claude-opus-4.8",
@@ -838,7 +857,10 @@ test("resellers of one upstream model share a default effort when their ladders 
   for (const model of MODELS) {
     const ladder = (model.reasoningLevels || []).map((level) => level.effort).join(",");
     if (!ladder) continue;
-    const key = `${model.upstreamModel || model.slug.split("/").at(-1)}|${ladder}`;
+    // Kiro Prism owns the effort default for its aggregated routes; matching
+    // upstream names on direct providers do not imply the same gateway default.
+    const providerDefaultScope = model.provider === "kiro-prism" ? "|kiro-prism" : "";
+    const key = `${model.upstreamModel || model.slug.split("/").at(-1)}|${ladder}${providerDefaultScope}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(model);
   }

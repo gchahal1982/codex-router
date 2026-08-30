@@ -27,6 +27,7 @@ import { recordRateLimitSnapshot } from "./rate-limit-state.mjs";
 import { recordProviderCooldown } from "./model-failover.mjs";
 import { canonicalProviderId, readProviderSelection } from "./provider-selection.mjs";
 import { stripImages, supportsImageInput } from "./vision-bridge.mjs";
+import { createThinkTagFilter } from "./think-tag-filter.mjs";
 import {
   credentialLabel,
   credentialStatus,
@@ -823,6 +824,20 @@ function normalizeBody(buffer, contentType, route) {
     delete payload.reasoning_effort;
     payload.thinking = { type: "adaptive" };
     payload.reasoning_split = true;
+  } else if (model.requestProfile === "free-prism") {
+    // Free Prism multiplexes several upstream families behind one
+    // OpenAI-compatible endpoint. These gateway-only fields select the
+    // upstream route and are removed by Prism before vendor dispatch.
+    payload.provider = model.upstreamProvider;
+    payload.app = "codex-desktop";
+    const effort = { minimal: "off", ultra: "max" }[payload.reasoning_effort] ||
+      (["off", "low", "medium", "high", "xhigh", "max"].includes(
+        payload.reasoning_effort,
+      )
+        ? payload.reasoning_effort
+        : "high");
+    delete payload.reasoning_effort;
+    payload.thinking = effort;
   } else if (model.requestProfile === "ox-alpha") {
     // Ox Alpha's named GLM-5.3-Flash successor always thinks, and both
     // checked-in routes using this legacy-named profile validate
@@ -1182,10 +1197,18 @@ async function handleRequest(request, response) {
     upstream.ok && upstreamContentType.toLowerCase().includes("text/event-stream");
   const responsesJson = normalized.responseAdapter === "responses" &&
     upstream.ok && upstreamContentType.toLowerCase().includes("application/json");
+  // Prism can relay a model's private reasoning as a leading <think> block in
+  // ordinary chat content. Scope the compatibility filter to that provider;
+  // native v0.5.1 profiles use their own protocol-specific reasoning fields.
+  const prismThinkFilter = normalized.provider.id === "free-prism" &&
+    route === "/chat/completions" && upstream.ok
+    ? createThinkTagFilter(upstreamContentType)
+    : undefined;
   const transform = [
     responsesStream ? createResponsesStreamTransform() : undefined,
     responsesJson ? createResponsesJsonTransform() : undefined,
     zaiCacheUsageTransform(normalized.provider.id, upstreamContentType),
+    prismThinkFilter,
   ].filter(Boolean);
   const denylist = transform.length
     ? new Set([...HOP_BY_HOP_HEADERS, "content-type"])

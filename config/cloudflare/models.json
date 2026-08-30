@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "slug": "cloudflare-workers-ai/kimi-k2.7-code",
+      "gatewayModel": "cloudflare-workers-ai-kimi-k2-7-code",
+      "upstreamModel": "@cf/moonshotai/kimi-k2.7-code",
+      "provider": "cloudflare-workers-ai",
+      "listed": true,
+      "displayName": "Kimi K2.7 Code (Cloudflare)",
+      "description": "Kimi K2.7 Code through Cloudflare Workers AI.",
+      "priority": 20,
+      "defaultEffort": "high",
+      "reasoningLevels": [{"effort": "high", "description": "Model default reasoning"}],
+      "contextWindow": 262144,
+      "autoCompact": 235000,
+      "inputModalities": ["text", "image"],
+      "compHash": "cloudflare-workers-ai-kimi-k2-7-code-v1"
+    },
+    {
+      "slug": "cloudflare-workers-ai/glm-5.2",
+      "gatewayModel": "cloudflare-workers-ai-glm-5-2",
+      "upstreamModel": "@cf/zai-org/glm-5.2",
+      "provider": "cloudflare-workers-ai",
+      "listed": true,
+      "displayName": "GLM 5.2 (Cloudflare)",
+      "description": "GLM 5.2 through Cloudflare Workers AI.",
+      "priority": 21,
+      "defaultEffort": "high",
+      "reasoningLevels": [{"effort": "high", "description": "Model default reasoning"}],
+      "contextWindow": 262144,
+      "autoCompact": 235000,
+      "inputModalities": ["text"],
+      "compHash": "cloudflare-workers-ai-glm-5-2-v1"
+    }
+  ]
+}

@@ -1,0 +1,927 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "slug": "kiro-prism/auto",
+      "gatewayModel": "kiro-prism-auto",
+      "upstreamModel": "auto",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "auto (Kiro Prism)",
+      "description": "Kiro Prism model auto",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-auto-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-opus-5",
+      "gatewayModel": "kiro-prism-claude-opus-5",
+      "upstreamModel": "claude-opus-5",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-opus-5 (Kiro Prism)",
+      "description": "Kiro Prism model claude-opus-5",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-opus-5-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-sonnet-5",
+      "gatewayModel": "kiro-prism-claude-sonnet-5",
+      "upstreamModel": "claude-sonnet-5",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-sonnet-5 (Kiro Prism)",
+      "description": "Kiro Prism model claude-sonnet-5",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-sonnet-5-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-opus-4.8",
+      "gatewayModel": "kiro-prism-claude-opus-4-8",
+      "upstreamModel": "claude-opus-4.8",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-opus-4.8 (Kiro Prism)",
+      "description": "Kiro Prism model claude-opus-4.8",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-opus-4-8-v1"
+    },
+    {
+      "slug": "kiro-prism/gpt-5.6-sol",
+      "gatewayModel": "kiro-prism-gpt-5-6-sol",
+      "upstreamModel": "gpt-5.6-sol",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "gpt-5.6-sol (Kiro Prism)",
+      "description": "Kiro Prism model gpt-5.6-sol",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 272000,
+      "autoCompact": 244800,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-gpt-5-6-sol-v1"
+    },
+    {
+      "slug": "kiro-prism/gpt-5.6-terra",
+      "gatewayModel": "kiro-prism-gpt-5-6-terra",
+      "upstreamModel": "gpt-5.6-terra",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "gpt-5.6-terra (Kiro Prism)",
+      "description": "Kiro Prism model gpt-5.6-terra",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 272000,
+      "autoCompact": 244800,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-gpt-5-6-terra-v1"
+    },
+    {
+      "slug": "kiro-prism/gpt-5.6-luna",
+      "gatewayModel": "kiro-prism-gpt-5-6-luna",
+      "upstreamModel": "gpt-5.6-luna",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "gpt-5.6-luna (Kiro Prism)",
+      "description": "Kiro Prism model gpt-5.6-luna",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 272000,
+      "autoCompact": 244800,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-gpt-5-6-luna-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-opus-4.7",
+      "gatewayModel": "kiro-prism-claude-opus-4-7",
+      "upstreamModel": "claude-opus-4.7",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-opus-4.7 (Kiro Prism)",
+      "description": "Kiro Prism model claude-opus-4.7",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-opus-4-7-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-opus-4.6",
+      "gatewayModel": "kiro-prism-claude-opus-4-6",
+      "upstreamModel": "claude-opus-4.6",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-opus-4.6 (Kiro Prism)",
+      "description": "Kiro Prism model claude-opus-4.6",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-opus-4-6-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-sonnet-4.6",
+      "gatewayModel": "kiro-prism-claude-sonnet-4-6",
+      "upstreamModel": "claude-sonnet-4.6",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-sonnet-4.6 (Kiro Prism)",
+      "description": "Kiro Prism model claude-sonnet-4.6",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-sonnet-4-6-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-opus-4.5",
+      "gatewayModel": "kiro-prism-claude-opus-4-5",
+      "upstreamModel": "claude-opus-4.5",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-opus-4.5 (Kiro Prism)",
+      "description": "Kiro Prism model claude-opus-4.5",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 200000,
+      "autoCompact": 180000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-opus-4-5-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-sonnet-4.5",
+      "gatewayModel": "kiro-prism-claude-sonnet-4-5",
+      "upstreamModel": "claude-sonnet-4.5",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-sonnet-4.5 (Kiro Prism)",
+      "description": "Kiro Prism model claude-sonnet-4.5",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 200000,
+      "autoCompact": 180000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-sonnet-4-5-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-sonnet-4",
+      "gatewayModel": "kiro-prism-claude-sonnet-4",
+      "upstreamModel": "claude-sonnet-4",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-sonnet-4 (Kiro Prism)",
+      "description": "Kiro Prism model claude-sonnet-4",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 200000,
+      "autoCompact": 180000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-sonnet-4-v1"
+    },
+    {
+      "slug": "kiro-prism/claude-haiku-4.5",
+      "gatewayModel": "kiro-prism-claude-haiku-4-5",
+      "upstreamModel": "claude-haiku-4.5",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "claude-haiku-4.5 (Kiro Prism)",
+      "description": "Kiro Prism model claude-haiku-4.5",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 200000,
+      "autoCompact": 180000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-claude-haiku-4-5-v1"
+    },
+    {
+      "slug": "kiro-prism/deepseek-3.2",
+      "gatewayModel": "kiro-prism-deepseek-3-2",
+      "upstreamModel": "deepseek-3.2",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "deepseek-3.2 (Kiro Prism)",
+      "description": "Kiro Prism model deepseek-3.2",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 164000,
+      "autoCompact": 147600,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-deepseek-3-2-v1"
+    },
+    {
+      "slug": "kiro-prism/minimax-m2.5",
+      "gatewayModel": "kiro-prism-minimax-m2-5",
+      "upstreamModel": "minimax-m2.5",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "minimax-m2.5 (Kiro Prism)",
+      "description": "Kiro Prism model minimax-m2.5",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 196000,
+      "autoCompact": 176400,
+      "inputModalities": [
+        "text"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": false,
+      "compHash": "kiro-prism-minimax-m2-5-v1"
+    },
+    {
+      "slug": "kiro-prism/minimax-m2.1",
+      "gatewayModel": "kiro-prism-minimax-m2-1",
+      "upstreamModel": "minimax-m2.1",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "minimax-m2.1 (Kiro Prism)",
+      "description": "Kiro Prism model minimax-m2.1",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 196000,
+      "autoCompact": 176400,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-minimax-m2-1-v1"
+    },
+    {
+      "slug": "kiro-prism/glm-5",
+      "gatewayModel": "kiro-prism-glm-5",
+      "upstreamModel": "glm-5",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "glm-5 (Kiro Prism)",
+      "description": "Kiro Prism model glm-5",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 200000,
+      "autoCompact": 180000,
+      "inputModalities": [
+        "text"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": false,
+      "compHash": "kiro-prism-glm-5-v1"
+    },
+    {
+      "slug": "kiro-prism/qwen3-coder-next",
+      "gatewayModel": "kiro-prism-qwen3-coder-next",
+      "upstreamModel": "qwen3-coder-next",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "qwen3-coder-next (Kiro Prism)",
+      "description": "Kiro Prism model qwen3-coder-next",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "medium",
+          "description": "Gateway default reasoning"
+        }
+      ],
+      "contextWindow": 256000,
+      "autoCompact": 230400,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-qwen3-coder-next-v1"
+    },
+    {
+      "slug": "kiro-prism/grok-build-0.1",
+      "gatewayModel": "kiro-prism-grok-build-0-1",
+      "upstreamModel": "grok-build-0.1",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "grok-build-0.1 (Kiro Prism)",
+      "description": "Grok subscription model grok-build-0.1",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        }
+      ],
+      "contextWindow": 262144,
+      "autoCompact": 235929,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-grok-build-0-1-v1"
+    },
+    {
+      "slug": "kiro-prism/grok-composer-2.5-fast",
+      "gatewayModel": "kiro-prism-grok-composer-2-5-fast",
+      "upstreamModel": "grok-composer-2.5-fast",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "grok-composer-2.5-fast (Kiro Prism)",
+      "description": "Grok subscription model grok-composer-2.5-fast",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        }
+      ],
+      "contextWindow": 262144,
+      "autoCompact": 235929,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-grok-composer-2-5-fast-v1"
+    },
+    {
+      "slug": "kiro-prism/grok-4.3",
+      "gatewayModel": "kiro-prism-grok-4-3",
+      "upstreamModel": "grok-4.3",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "grok-4.3 (Kiro Prism)",
+      "description": "Grok subscription model grok-4.3",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        }
+      ],
+      "contextWindow": 262144,
+      "autoCompact": 235929,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-grok-4-3-v1"
+    },
+    {
+      "slug": "kiro-prism/grok-4.20-0309-reasoning",
+      "gatewayModel": "kiro-prism-grok-4-20-0309-reasoning",
+      "upstreamModel": "grok-4.20-0309-reasoning",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "grok-4.20-0309-reasoning (Kiro Prism)",
+      "description": "Grok subscription model grok-4.20-0309-reasoning",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        }
+      ],
+      "contextWindow": 262144,
+      "autoCompact": 235929,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-grok-4-20-0309-reasoning-v1"
+    },
+    {
+      "slug": "kiro-prism/grok-4.20-0309-non-reasoning",
+      "gatewayModel": "kiro-prism-grok-4-20-0309-non-reasoning",
+      "upstreamModel": "grok-4.20-0309-non-reasoning",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "grok-4.20-0309-non-reasoning (Kiro Prism)",
+      "description": "Grok subscription model grok-4.20-0309-non-reasoning",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        }
+      ],
+      "contextWindow": 262144,
+      "autoCompact": 235929,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-grok-4-20-0309-non-reasoning-v1"
+    },
+    {
+      "slug": "kiro-prism/grok-4.20-multi-agent-0309",
+      "gatewayModel": "kiro-prism-grok-4-20-multi-agent-0309",
+      "upstreamModel": "grok-4.20-multi-agent-0309",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "grok-4.20-multi-agent-0309 (Kiro Prism)",
+      "description": "Grok subscription model grok-4.20-multi-agent-0309",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        }
+      ],
+      "contextWindow": 262144,
+      "autoCompact": 235929,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-grok-4-20-multi-agent-0309-v1"
+    },
+    {
+      "slug": "kiro-prism/qwen3.8-max",
+      "gatewayModel": "kiro-prism-qwen3-8-max",
+      "upstreamModel": "qwen3.8-max",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "Qwen 3.8 Max · Token Plan (Kiro Prism)",
+      "description": "QwenCloud Token Plan subscription model qwen3.8-max",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-qwen3-8-max-v1"
+    },
+    {
+      "slug": "kiro-prism/grok-4.6",
+      "gatewayModel": "kiro-prism-grok-4-6",
+      "upstreamModel": "grok-4.6",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "Grok 4.6 (Kiro Prism)",
+      "description": "Grok 4.6 through Kiro Prism's subscription-backed xAI OAuth provider.",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning effort"
+        }
+      ],
+      "contextWindow": 500000,
+      "autoCompact": 450000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-grok-4-6-v1"
+    },
+    {
+      "slug": "kiro-prism/kimi-k3",
+      "gatewayModel": "kiro-prism-kimi-k3",
+      "upstreamModel": "kimi-k3",
+      "provider": "kiro-prism",
+      "listed": true,
+      "displayName": "Kimi K3 · Modal (Kiro Prism)",
+      "description": "Moonshot Kimi K3 through Kiro Prism's budget-capped Modal endpoint",
+      "priority": 99,
+      "defaultEffort": "medium",
+      "reasoningLevels": [
+        {
+          "effort": "low",
+          "description": "Low reasoning effort"
+        },
+        {
+          "effort": "medium",
+          "description": "Medium reasoning effort"
+        },
+        {
+          "effort": "high",
+          "description": "High reasoning effort"
+        }
+      ],
+      "contextWindow": 1000000,
+      "autoCompact": 900000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "supportsReasoningSummaries": true,
+      "supportsImageDetailOriginal": true,
+      "compHash": "kiro-prism-kimi-k3-v1"
+    }
+  ]
+}

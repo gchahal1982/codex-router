@@ -534,6 +534,12 @@ function modelProblem(model, providers, slugs, gatewayModels) {
     return `model ${model.slug} has an invalid requestProfile`;
   }
   if (
+    model.upstreamProvider !== undefined &&
+    (typeof model.upstreamProvider !== "string" || !model.upstreamProvider.trim())
+  ) {
+    return `model ${model.slug} has an invalid upstreamProvider`;
+  }
+  if (
     model.requiresTrailingUserTurn !== undefined &&
     typeof model.requiresTrailingUserTurn !== "boolean"
   ) {

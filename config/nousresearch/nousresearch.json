@@ -14,9 +14,12 @@
           "NOUS_PORTAL_API_KEY"
         ],
         "file": "nousresearch-api-key.secret",
-        "legacyFiles": [],
+        "legacyFiles": [
+          "nous-api-key.secret"
+        ],
         "keychainServices": [
-          "codex-router-nousresearch"
+          "codex-router-nousresearch",
+          "codex-router-nous-api"
         ],
         "prompt": "Nous Portal API key"
       }
