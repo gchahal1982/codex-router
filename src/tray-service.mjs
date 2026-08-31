@@ -4,7 +4,7 @@ import path from "node:path";
 import { SOURCE_ROOT } from "./paths.mjs";
 
 // macOS supervises the tray through launchd and Windows through Task
-// Scheduler. Linux is launched directly by bin/model-router-tray: its normal
+// Scheduler. Linux is launched directly by bin/codex-router-tray: its normal
 // Electron tray/window works, but there is no portable graphical-session
 // supervisor contract to mutate here.
 const SUPERVISORS = {
@@ -20,7 +20,7 @@ const supervisor = SUPERVISORS[platform];
 if (!supervisor) {
   const why =
     `Tray supervision is unavailable on ${platform}; ` +
-    "launch or rebuild the Control Center with ./bin/model-router-tray.";
+    "launch or rebuild the Control Center with ./bin/codex-router-tray.";
   // Status remains a successful machine-readable capability probe. A
   // mutation is different: exit non-zero so CLI and Electron callers cannot
   // turn an unsupported enable/disable/restart into a false success toast.

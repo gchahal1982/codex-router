@@ -49,7 +49,7 @@ Settings are stored in `UserDefaults.standard` under consistent `ModelRouterTray
   - Always uses the existing 180pt reserved width, including when the model name is hidden.
 
 ### 4. Settings UI (`TrayView` Settings Tab)
-In `ModelRouterTrayApp.swift`'s Settings tab:
+In `CodexRouterTrayApp.swift`'s Settings tab:
 - **Menu Bar Section**:
   - **Display Mode**: Segmented control (`Standard` | `Icon Only`).
   - **Show Model Name**: Toggle (visible when in `Standard` mode).

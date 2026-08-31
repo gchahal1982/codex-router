@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 @Suite("Menu bar settings", .serialized)
 struct MenuBarSettingsTests {
@@ -205,6 +205,8 @@ struct MenuBarSettingsTests {
     let dest = try RouterStore.persistCustomMenuBarIcon(from: source, into: support)
     #expect(dest.lastPathComponent == "menu-bar-icon.png")
     #expect(FileManager.default.fileExists(atPath: dest.path))
+    // Preserve the existing Application Support namespace so a branding-only
+    // update does not orphan the user's custom menu-bar icon.
     #expect(dest.path.contains("ModelRouterTray"))
   }
 

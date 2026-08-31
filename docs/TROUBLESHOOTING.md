@@ -3,7 +3,7 @@
 Start with:
 
 ```sh
-./bin/model-router codex doctor
+./bin/codex-router doctor
 ```
 
 Every `FAIL` includes a targeted fix. To rebuild only repository-managed files,
@@ -28,7 +28,7 @@ that did not perform the install. The safe fix is to repair through the
 checkout that owns the installed state:
 
 ```sh
-./bin/model-router codex doctor --fix
+./bin/codex-router doctor --fix
 ```
 
 When the recorded owner still exists, this command runs the repair there and
@@ -47,7 +47,7 @@ cat "$STATE_DIR/install-manifest.json" | sed -n '1,80p'
 To deliberately switch ownership to the checkout you are running from:
 
 ```sh
-MODEL_ROUTER_ALLOW_FOREIGN_STATE=1 ./bin/model-router codex doctor --fix
+MODEL_ROUTER_ALLOW_FOREIGN_STATE=1 ./bin/codex-router doctor --fix
 ```
 
 ## External models are missing from the picker
@@ -76,14 +76,14 @@ Pulling `main` updates only the source checkout. Apply that revision to the
 per-user Codex installation and verify the generated custom agents:
 
 ```sh
-./bin/model-router codex update
-./bin/model-router codex doctor
+./bin/codex-router update
+./bin/codex-router doctor
 ```
 
 The doctor should report `OK` for `Routed model agents`. If it does not:
 
 ```sh
-./bin/model-router codex doctor --fix
+./bin/codex-router doctor --fix
 ```
 
 Then fully quit Codex, reopen it, and create a new task. The generated personal
@@ -130,9 +130,9 @@ not offer a safe per-app bypass for this failure. Until xAI publishes an
 official CLI build that Windows allows, use the API-key provider instead:
 
 ```powershell
-./model-router.ps1 codex provider-key grok-api set
-./model-router.ps1 codex providers enable grok-api
-./model-router.ps1 codex doctor
+./codex-router.ps1 provider-key grok-api set
+./codex-router.ps1 providers enable grok-api
+./codex-router.ps1 doctor
 ```
 
 An OAuth session created while the executable was allowed is not a durable
@@ -280,7 +280,7 @@ Restart the router service so the inject path is loaded, then start a new
 parent turn (or nudge the stuck parent so it issues another request):
 
 ```sh
-./bin/model-router codex doctor --fix
+./bin/codex-router doctor --fix
 ```
 
 Already-stuck badges in an old San Francisco turn settle on the next parent

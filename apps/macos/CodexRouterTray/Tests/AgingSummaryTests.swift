@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 // The savings card has to explain an idle pass without contradicting itself.
 // Size is only one of the two reasons a result is skipped -- a result the

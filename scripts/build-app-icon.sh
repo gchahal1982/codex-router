@@ -2,7 +2,7 @@
 set -eu
 
 # Rebuild every desktop icon from
-# apps/macos/ModelRouterTray/Resources/AppIcon.svg.
+# apps/macos/CodexRouterTray/Resources/AppIcon.svg.
 #
 # The generated assets are committed, so a normal tray build never runs this
 # script and never needs a rasterizer. Run it only after editing the SVG, and
@@ -15,8 +15,8 @@ set -eu
 # turning into grey mush.
 
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-source_svg="$repo_dir/apps/macos/ModelRouterTray/Resources/AppIcon.svg"
-output_icns=${1:-"$repo_dir/apps/macos/ModelRouterTray/Resources/AppIcon.icns"}
+source_svg="$repo_dir/apps/macos/CodexRouterTray/Resources/AppIcon.svg"
+output_icns=${1:-"$repo_dir/apps/macos/CodexRouterTray/Resources/AppIcon.icns"}
 control_center_assets="$repo_dir/apps/control-center/assets"
 
 if [ "$(uname -s)" != "Darwin" ]; then

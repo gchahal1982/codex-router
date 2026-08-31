@@ -16,7 +16,7 @@ targets:
     platform: macOS
     sources:
       - path: RouterUsageWidget
-      - path: ../ModelRouterTray/Sources/RouterWidgetSnapshot.swift
+      - path: ../CodexRouterTray/Sources/RouterWidgetSnapshot.swift
         group: Shared
     settings:
       base:
@@ -36,7 +36,7 @@ targets:
     sources:
       - path: RouterUsageWidgetTests
       - path: RouterUsageWidget/RouterUsageWidget.swift
-      - path: ../ModelRouterTray/Sources/RouterWidgetSnapshot.swift
+      - path: ../CodexRouterTray/Sources/RouterWidgetSnapshot.swift
         group: Shared
     settings:
       base:

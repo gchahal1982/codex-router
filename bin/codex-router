@@ -26,6 +26,11 @@ usage() {
   cat <<'EOF'
 Usage: codex-router <command> [options]
 
+Client targets
+  codex COMMAND     Compatibility form; Codex is the default target
+  dsh COMMAND       Manage the DeepSeek Harness client integration
+  gemini COMMAND    Manage the Gemini CLI client integration
+
 Setup and status
   setup             Configure Codex integration and provider credentials
   doctor            Diagnose the installation and report what is wrong
@@ -67,6 +72,15 @@ case $command in
     ;;
 esac
 shift
+
+# The branded command is also the one entry point for secondary clients. The
+# older target dispatcher remains an internal compatibility shim, but users do
+# not need to know or type its historical name.
+case $command in
+  codex | dsh | gemini)
+    exec "$bin_dir/model-router" "$command" "$@"
+    ;;
+esac
 
 # A command is a name, never a path: rejecting separators and dot-prefixes keeps
 # `codex-router ../something` from reaching outside `bin/`.

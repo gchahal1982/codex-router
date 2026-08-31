@@ -1,9 +1,9 @@
 {
-  "name": "codex-model-router",
+  "name": "codex-router",
   "version": "0.5.1",
   "private": true,
   "type": "module",
-  "description": "Extensible local model router for Codex and Cursor",
+  "description": "Extensible Codex Router for Codex and supported clients",
   "engines": {
     "node": ">=22.19.0"
   },

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 @Suite("Provider icon sizing")
 struct ProviderIconTests {

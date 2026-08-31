@@ -31,7 +31,7 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - name: Test the macOS tray
         if: runner.os == 'macOS'
-        working-directory: apps/macos/ModelRouterTray
+        working-directory: apps/macos/CodexRouterTray
         run: swift test
       - name: Test the macOS widget
         if: runner.os == 'macOS'
@@ -311,7 +311,7 @@ jobs:
           test "$actual_short_version" = "$expected_short_version"
           test "$actual_control_version" = "$expected_control_version"
           test "$actual_build_version" = "$GITHUB_RUN_NUMBER"
-          lipo "$app/Contents/MacOS/ModelRouterTray" -verify_arch x86_64 arm64
+          lipo "$app/Contents/MacOS/CodexRouterTray" -verify_arch x86_64 arm64
           widget="$app/Contents/PlugIns/RouterUsageWidget.appex"
           lipo "$widget/Contents/MacOS/RouterUsageWidget" -verify_arch x86_64 arm64
           lipo "$app/Contents/Resources/Control Center.app/Contents/MacOS/Codex Router" -verify_arch x86_64 arm64
@@ -337,9 +337,9 @@ jobs:
         run: |
           set -euo pipefail
           app="$RUNNER_TEMP/Codex Router.app"
-          outer="$app/Contents/MacOS/ModelRouterTray"
+          outer="$app/Contents/MacOS/CodexRouterTray"
           embedded="$app/Contents/Resources/Control Center.app/Contents/MacOS/Codex Router"
-          log="$RUNNER_TEMP/model-router-macos-smoke.log"
+          log="$RUNNER_TEMP/codex-router-macos-smoke.log"
 
           query_lifecycle() {
             /usr/bin/env -u ELECTRON_RUN_AS_NODE "$embedded" --query-lifecycle
@@ -473,10 +473,10 @@ jobs:
           fi
           trap - EXIT
       - name: Package the one visible application
-        run: ditto -c -k --keepParent "$RUNNER_TEMP/Codex Router.app" "$RUNNER_TEMP/model-router-macos.zip"
+        run: ditto -c -k --keepParent "$RUNNER_TEMP/Codex Router.app" "$RUNNER_TEMP/codex-router-macos.zip"
       - uses: actions/upload-artifact@v7
         with:
-          name: model-router-macOS-${{ github.sha }}
-          path: ${{ runner.temp }}/model-router-macos.zip
+          name: codex-router-macOS-${{ github.sha }}
+          path: ${{ runner.temp }}/codex-router-macos.zip
           if-no-files-found: error
           retention-days: 14

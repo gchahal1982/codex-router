@@ -32,8 +32,8 @@ test("both dispatchers expose reviewed external skill management", () => {
   assert.match(windows, /"skills"\s*\{\s*Invoke-RouterNode "src\\skills-install\.mjs" \$Arguments/);
   const doctor = readFileSync(path.join(root, "src", "doctor.mjs"), "utf8");
   assert.match(doctor, /process\.platform === "win32"/);
-  assert.match(doctor, /\.\\\\model-router\.ps1 codex skills/);
-  assert.match(doctor, /\.\/bin\/model-router codex skills/);
+  assert.match(doctor, /\.\\\\codex-router\.ps1 skills/);
+  assert.match(doctor, /\.\/bin\/codex-router skills/);
   assert.match(doctor, /approve-external/);
   assert.match(doctor, /revoke-external/);
 });

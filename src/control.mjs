@@ -2674,7 +2674,7 @@ function handleTray(action) {
     // checkout even when its source fingerprint says the installed copy is
     // current, so this bypasses the update flow's staleness check and runs
     // the launcher directly. The launcher quits the running tray only after
-    // the staged replacement passes verification. `bin/model-router-tray` is
+    // the staged replacement passes verification. `bin/codex-router-tray` is
     // a POSIX shell script; Windows reaches the same sequence through
     // `codex-router.ps1 tray rebuild`, which owns the same unified Electron
     // replacement transaction so it exists once instead of drifting.
@@ -2694,7 +2694,7 @@ function handleTray(action) {
           ],
           { stdio: "inherit", env: process.env, windowsHide: true },
         )
-      : spawnSync(path.join(REPO_ROOT, "bin", "model-router-tray"), ["--preserve-window"], {
+      : spawnSync(path.join(REPO_ROOT, "bin", "codex-router-tray"), ["--preserve-window"], {
           stdio: "inherit",
           env: process.env,
         });

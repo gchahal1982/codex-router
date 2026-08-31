@@ -21,7 +21,7 @@ test("dashboard contract is attached to the shared catalog snapshot", async () =
 });
 
 test("tray consumes only the dashboard route summary", async () => {
-  const source = (await readFile(new URL("../apps/macos/ModelRouterTray/Sources/ModelRouterTrayApp.swift", import.meta.url), "utf8"))
+  const source = (await readFile(new URL("../apps/macos/CodexRouterTray/Sources/CodexRouterTrayApp.swift", import.meta.url), "utf8"))
     .replace(/\r\n/g, "\n");
   assert.match(source, /struct RouterDashboardSnapshot: Decodable/);
   assert.match(source, /providerDashboardSummary/);

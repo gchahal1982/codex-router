@@ -7,10 +7,10 @@ cd "$repo_dir"
 # Codex agents directory -- native spawn overrides whose payloads are Codex's
 # own encrypted format. DeepSeek Harness delegates through `dsh-tool-subagent`,
 # whose child model comes from the composition or, unset, from the default
-# model selection; see `./bin/model-router dsh subagent-preset`.
+# model selection; see `./bin/codex-router dsh subagent-preset`.
 case "${MODEL_ROUTER_TARGET:-codex}" in
   codex) ;;
-  dsh) echo "Native subagent overrides are a Codex concept. For DeepSeek Harness run: ./bin/model-router dsh subagent-preset" >&2; exit 2 ;;
+  dsh) echo "Native subagent overrides are a Codex concept. For DeepSeek Harness run: ./bin/codex-router dsh subagent-preset" >&2; exit 2 ;;
   gemini) echo "Native subagent overrides are a Codex concept. Gemini CLI delegates through its own subagents, which the router does not configure." >&2; exit 2 ;;
   *) echo "MODEL_ROUTER_TARGET must be codex, dsh, or gemini." >&2; exit 2 ;;
 esac

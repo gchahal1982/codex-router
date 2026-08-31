@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 @Suite("Curated MLX tray state")
 struct LocalMlxSnapshotTests {

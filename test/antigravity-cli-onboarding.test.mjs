@@ -122,8 +122,8 @@ test("providers login reports a missing client secret before opening consent", (
 test("installation docs publish working POSIX and PowerShell login commands", () => {
   for (const file of ["README.md", path.join("docs", "INSTALL.md")]) {
     const contents = readFileSync(path.join(root, file), "utf8");
-    assert.match(contents, /\.\/bin\/model-router codex providers login antigravity-oauth/);
-    assert.match(contents, /\.\\model-router\.ps1 codex providers login antigravity-oauth/);
+    assert.match(contents, /\.\/bin\/codex-router providers login antigravity-oauth/);
+    assert.match(contents, /\.\\codex-router\.ps1 providers login antigravity-oauth/);
   }
 });
 

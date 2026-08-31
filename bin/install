@@ -374,10 +374,10 @@ case "$tray_plan" in
       # is indistinguishable from success, and the companion would silently stay
       # on its old binary exactly as it did before this step existed.
       tray_log=$(mktemp)
-      if "$repo_dir/bin/model-router-tray" --preserve-window >"$tray_log" 2>&1; then
+      if "$repo_dir/bin/codex-router-tray" --preserve-window >"$tray_log" 2>&1; then
         echo "Menu-bar companion rebuilt from the updated sources."
       else
-        echo "Menu-bar companion could not be rebuilt; the router is installed. Retry with ./bin/model-router-tray." >&2
+        echo "Menu-bar companion could not be rebuilt; the router is installed. Retry with ./bin/codex-router-tray." >&2
         sed 's/^/  /' "$tray_log" >&2
       fi
       rm -f "$tray_log"

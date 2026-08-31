@@ -210,7 +210,7 @@ export const LEGACY_USER_TRAY_APP_PATH = path.join(
   "Model Router.app",
 );
 export const LEGACY_TRAY_APP_PATH = path.join(SOURCE_ROOT, "dist", "Model Router.app");
-export const TRAY_APP_BINARY = path.join(TRAY_APP_PATH, "Contents", "MacOS", "ModelRouterTray");
+export const TRAY_APP_BINARY = path.join(TRAY_APP_PATH, "Contents", "MacOS", "CodexRouterTray");
 // Task Scheduler names the tray separately from the router's own task so
 // stopping one never takes the other down.
 export const TRAY_TASK_NAME = "Codex Router Tray";

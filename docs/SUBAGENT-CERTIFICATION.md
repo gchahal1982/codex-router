@@ -126,7 +126,7 @@ definition is written — one click from off to spawnable. The same thing from t
 CLI:
 
 ```bash
-bin/model-router codex subagents set <provider>/<model> on
+bin/codex-router subagents set <provider>/<model> on
 node src/catalog.mjs                 # publish; the Control Center does this for you
 ```
 
@@ -150,7 +150,7 @@ Separately from turning a route on, the five-check run produces the artifact a
 `v2_agent` application needs:
 
 ```bash
-bin/model-router codex subagents certify <provider>/<model> [<provider>/<model> ...]
+bin/codex-router subagents certify <provider>/<model> [<provider>/<model> ...]
 ```
 
 **This spends real quota**: two HTTP turns per route, then a Codex parent turn

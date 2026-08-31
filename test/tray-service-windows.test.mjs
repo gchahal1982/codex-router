@@ -373,7 +373,7 @@ test("a platform with no supervisor says so instead of reporting success", () =>
 });
 
 // macOS and Linux each have one command that builds the companion and hands it
-// to a supervisor. Windows had none: bin/model-router-tray told you to go read
+// to a supervisor. Windows had none: bin/codex-router-tray told you to go read
 // a build script, and codex-router.ps1 had no tray verb at all, so the only
 // route was knowing two separate incantations.
 test("the Windows CLI exposes tray as a first-class command", () => {
@@ -629,7 +629,7 @@ test("tray repair validates the task and grants only its current principal contr
 });
 
 test("the POSIX tray launcher points Windows at that command", () => {
-  const launcher = readFileSync(path.join(root, "bin", "model-router-tray"), "utf8");
+  const launcher = readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8");
   assert.match(launcher, /codex-router\.ps1 tray/);
   assert.doesNotMatch(launcher, /use scripts\/build-desktop-tray\.ps1 on Windows/);
 });

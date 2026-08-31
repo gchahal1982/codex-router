@@ -15,7 +15,7 @@
 ### Task 1: Failing tests for settings resolution and layout
 
 **Files:**
-- Create: `apps/macos/ModelRouterTray/Tests/MenuBarSettingsTests.swift`
+- Create: `apps/macos/CodexRouterTray/Tests/MenuBarSettingsTests.swift`
 - Modify: `test/tray-rebuild.test.mjs`
 
 - [ ] **Step 1: Write Swift tests for `resolveMenuBarSettings` and layout metrics**
@@ -38,13 +38,13 @@ Expected: new assertions fail because the helpers and wiring are not present.
 ### Task 2: Custom-icon persist + tooltip localization
 
 **Files:**
-- Modify: `apps/macos/ModelRouterTray/Sources/ModelRouterTrayApp.swift`
-- Modify: `apps/macos/ModelRouterTray/Sources/Localization.swift`
-- Modify: `apps/macos/ModelRouterTray/Sources/RouterArabicText.swift`
-- Modify: `apps/macos/ModelRouterTray/Sources/RouterHindiText.swift`
-- Modify: `apps/macos/ModelRouterTray/Sources/RouterJapaneseText.swift`
-- Modify: `apps/macos/ModelRouterTray/Sources/RouterKoreanText.swift`
-- Modify: `apps/macos/ModelRouterTray/Tests/MenuBarSettingsTests.swift`
+- Modify: `apps/macos/CodexRouterTray/Sources/CodexRouterTrayApp.swift`
+- Modify: `apps/macos/CodexRouterTray/Sources/Localization.swift`
+- Modify: `apps/macos/CodexRouterTray/Sources/RouterArabicText.swift`
+- Modify: `apps/macos/CodexRouterTray/Sources/RouterHindiText.swift`
+- Modify: `apps/macos/CodexRouterTray/Sources/RouterJapaneseText.swift`
+- Modify: `apps/macos/CodexRouterTray/Sources/RouterKoreanText.swift`
+- Modify: `apps/macos/CodexRouterTray/Tests/MenuBarSettingsTests.swift`
 - Modify: `docs/MACOS-TRAY.md`
 - Modify: `docs/superpowers/specs/2026-08-18-custom-menubar-icons-and-mode-design.md`
 

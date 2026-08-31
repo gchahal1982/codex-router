@@ -3,7 +3,7 @@
 This page covers the Codex target:
 
 ```sh
-./bin/model-router codex doctor
+./bin/codex-router doctor
 ```
 
 ## Supported hosts
@@ -133,7 +133,7 @@ Grok OAuth uses the official Grok CLI session:
 ```sh
 npm install -g @xai-official/grok
 grok login --oauth
-./bin/model-router codex providers enable grok-oauth
+./bin/codex-router providers enable grok-oauth
 ```
 
 The OAuth token remains in `~/.grok/auth.json` and is sent only to xAI's Grok
@@ -164,8 +164,8 @@ before opening Google consent if it is absent.
 
 ```sh
 test -n "$ANTIGRAVITY_CLIENT_SECRET"
-./bin/model-router codex providers login antigravity-oauth
-./bin/model-router codex providers enable antigravity-oauth
+./bin/codex-router providers login antigravity-oauth
+./bin/codex-router providers enable antigravity-oauth
 ```
 
 Windows PowerShell:
@@ -174,8 +174,8 @@ Windows PowerShell:
 if (-not $env:ANTIGRAVITY_CLIENT_SECRET) {
   throw 'ANTIGRAVITY_CLIENT_SECRET is not set'
 }
-.\model-router.ps1 codex providers login antigravity-oauth
-.\model-router.ps1 codex providers enable antigravity-oauth
+.\codex-router.ps1 providers login antigravity-oauth
+.\codex-router.ps1 providers enable antigravity-oauth
 ```
 
 Bring-your-own OAuth client overrides exist for development, but are not yet a
@@ -358,11 +358,11 @@ kill-switch in the state directory (`discovery-mode.json`). While it is set:
 The full lifecycle works in this state:
 
 ```sh
-./bin/model-router codex status
-./bin/model-router codex doctor    # exits 0; idle state reports as warnings
-./bin/model-router codex stop
-./bin/model-router codex start     # starts the background service again
-./bin/model-router codex uninstall
+./bin/codex-router status
+./bin/codex-router doctor    # exits 0; idle state reports as warnings
+./bin/codex-router stop
+./bin/codex-router start     # starts the background service again
+./bin/codex-router uninstall
 ```
 
 Uninstall is the undo path: it removes the managed config block and, once no
@@ -456,9 +456,9 @@ The optional `codex` shim closes that window by doing the check in the one place
 that is provably earlier than Codex — in front of it:
 
 ```sh
-./bin/model-router codex shim install
-./bin/model-router codex shim status
-./bin/model-router codex shim uninstall
+./bin/codex-router shim install
+./bin/codex-router shim status
+./bin/codex-router shim uninstall
 ```
 
 It is never installed automatically, because putting a file named `codex` on

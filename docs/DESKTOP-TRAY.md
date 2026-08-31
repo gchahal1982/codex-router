@@ -117,7 +117,7 @@ they no longer build or select the old Tauri or tray-only Electron shells:
 
 ```sh
 ./scripts/build-electron-companion.sh
-./bin/model-router-tray
+./bin/codex-router-tray
 ```
 
 Both scripts verify the renderer, package the native Electron executable, and
@@ -134,8 +134,8 @@ same Codex Router version first, then run the matching desktop package.
 
 | Asset | Platform |
 | --- | --- |
-| `model-router-<version>-windows-x64.exe` | Windows 10/11 unsigned tester installer |
-| `model-router-<version>-linux-x64.tar.gz` | Linux archive containing the executable AppImage |
+| `codex-router-<version>-windows-x64.exe` | Windows 10/11 unsigned tester installer |
+| `codex-router-<version>-linux-x64.tar.gz` | Linux archive containing the executable AppImage |
 
 Windows SmartScreen may warn about the unsigned installer. On Linux, extract
 the tarball before launching its AppImage; the archive preserves its executable
@@ -180,7 +180,7 @@ node src\control.mjs tray disable
 
 Quitting from the tray menu keeps it quit: the restart setting covers a crash,
 not a clean exit, so the tray returns at the next logon rather than reappearing
-immediately. Linux has no supervisor — launch it with `./bin/model-router-tray`
+immediately. Linux has no supervisor — launch it with `./bin/codex-router-tray`
 — and the tray commands say so instead of reporting a silent success.
 
 On Windows the same `Codex Router Tray` task is also managed directly through

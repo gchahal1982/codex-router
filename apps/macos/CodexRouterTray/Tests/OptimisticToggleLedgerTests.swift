@@ -1,6 +1,6 @@
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 @Suite("Optimistic toggle ledger")
 struct OptimisticToggleLedgerTests {

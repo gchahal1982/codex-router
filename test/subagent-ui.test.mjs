@@ -56,7 +56,7 @@ test("Control Center keeps legacy local proofs as candidates, not active v2 rout
 
 test("the macOS tray lists every model and varies only the switch", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   // The tray and the Models page describe the same models, so they must not
@@ -99,7 +99,7 @@ test("the browser and macOS tray model pickers can search enabled models", () =>
   const panel = readFileSync(path.join(root, "apps", "panel", "app.js"), "utf8");
   const html = readFileSync(path.join(root, "apps", "panel", "index.html"), "utf8");
   const macos = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   assert.match(html, /id="picker-model-search"/);

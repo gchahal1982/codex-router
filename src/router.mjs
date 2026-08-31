@@ -1395,7 +1395,7 @@ async function relayEncryptedAgentPayloadOnce(
       {
         type: "function",
         name: AGENT_PAYLOAD_RELAY_TOOL,
-        description: "Return a decrypted collaboration payload to the local model router.",
+        description: "Return a decrypted collaboration payload to the local Codex Router.",
         parameters: {
           type: "object",
           properties: { payload: { type: "string" } },
@@ -2540,7 +2540,7 @@ function requireCodexTransport(request, response) {
     writeJson(response, 403, {
       error: {
         type: "browser_request_rejected",
-        message: "Browser-originated requests are not accepted by the local model router.",
+        message: "Browser-originated requests are not accepted by the local Codex Router.",
       },
     });
     return false;

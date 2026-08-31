@@ -388,14 +388,14 @@ function installTray() {
         execFileSync("xcrun", ["--find", "swift"], { stdio: "ignore" });
       } catch {
         process.stdout.write(
-          "The Swift toolchain is missing; run `xcode-select --install`, then `./bin/model-router-tray` to add the companion later.\n",
+          "The Swift toolchain is missing; run `xcode-select --install`, then `./bin/codex-router-tray` to add the companion later.\n",
         );
         return;
       }
       // One canonical transaction stages the signed bundle, drains any
       // running embedded Control Center, swaps atomically, stamps the build,
       // and hands the native host to launchd.
-      run(path.join(SOURCE_ROOT, "bin", "model-router-tray"), []);
+      run(path.join(SOURCE_ROOT, "bin", "codex-router-tray"), []);
       process.stdout.write("Codex Router installed with its native menu-bar tray and Control Center.\n");
     } else if (process.platform === "win32") {
       // Windows had no path through here at all: the tray was built by hand or
@@ -415,7 +415,7 @@ function installTray() {
         "install",
       ]);
     } else {
-      run(path.join(SOURCE_ROOT, "bin", "model-router-tray"), []);
+      run(path.join(SOURCE_ROOT, "bin", "codex-router-tray"), []);
       process.stdout.write("Desktop companion built and launched.\n");
     }
   } catch (error) {
@@ -426,7 +426,7 @@ function installTray() {
           : "") +
         (process.platform === "win32"
           ? "The router itself is installed; retry later with .\\codex-router.ps1 tray.\n"
-          : "The router itself is installed; retry later with ./bin/model-router-tray.\n") +
+          : "The router itself is installed; retry later with ./bin/codex-router-tray.\n") +
         // Nothing to build and nothing to download, so it is the one suggestion
         // that cannot fail for the same reason this just did.
         "The companion also runs in a browser: .\\codex-router.ps1 panel (./bin/panel on macOS and Linux).\n",
@@ -442,7 +442,7 @@ async function main() {
     !(adoptNativeCatalog && legacy.adoptableNativeCatalog)
   ) {
     throw incomplete(
-      `An unknown model router owns ${legacy.config.modelCatalogJson}; automatic setup will not replace it.`,
+      `An unknown router owns ${legacy.config.modelCatalogJson}; automatic setup will not replace it.`,
     );
   }
   const stepTitles = ["Choose providers"];
@@ -627,12 +627,12 @@ async function main() {
     dshTarget
       ? `\nDeepSeek Harness is ready with: ${providerSummary}\n` +
         `It reloads its settings document on the next request, so there is nothing to restart.\n` +
-        `For native GPT models, run \`codex login\`, then \`./bin/model-router codex chatgpt-session enable\` once; that authorization is shared by every local client.\n`
+        `For native GPT models, run \`codex login\`, then \`./bin/codex-router chatgpt-session enable\` once; that authorization is shared by every local client.\n`
       : geminiTarget
         ? `\nGemini CLI is ready with: ${providerSummary}\n` +
           `It reads its environment at startup, so the next \`gemini\` run picks this up.\n` +
           `If it asks how to authenticate, choose "Use Gemini API key" once -- the key is this router's local caller capability.\n` +
-          `For native GPT models, run \`codex login\`, then \`./bin/model-router codex chatgpt-session enable\` once; that authorization is shared by every local client.\n`
+          `For native GPT models, run \`codex login\`, then \`./bin/codex-router chatgpt-session enable\` once; that authorization is shared by every local client.\n`
         : `\nCodex Router is ready with: ${providerSummary}\nFully quit Codex, reopen it, and start a new task.\n`,
   );
   if (visionBridge?.enabled && visionBridge.engine) {

@@ -2,7 +2,7 @@
 set -eu
 
 repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-tray_dir="$repo_dir/apps/macos/ModelRouterTray"
+tray_dir="$repo_dir/apps/macos/CodexRouterTray"
 widget_dir="$repo_dir/apps/macos/RouterUsageWidget"
 control_center_dir="$repo_dir/apps/control-center"
 signing_identity=${MODEL_ROUTER_CODESIGN_IDENTITY:--}
@@ -90,7 +90,7 @@ if [ -z "$control_center_bundle" ] || [ ! -d "$control_center_bundle" ]; then
   exit 1
 fi
 mkdir -p "$bundle_dir/Contents/MacOS" "$bundle_dir/Contents/Resources"
-cp "$binary_dir/ModelRouterTray" "$bundle_dir/Contents/MacOS/ModelRouterTray"
+cp "$binary_dir/CodexRouterTray" "$bundle_dir/Contents/MacOS/CodexRouterTray"
 cp "$tray_dir/Resources/Info.plist" "$bundle_dir/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $short_version" \
   "$bundle_dir/Contents/Info.plist"
@@ -112,10 +112,10 @@ if [ -f "$tray_dir/Resources/AppIcon.icns" ]; then
 else
   printf 'codex-router: AppIcon.icns is missing; run scripts/build-app-icon.sh.\n' >&2
 fi
-if [ -d "$binary_dir/ModelRouterTray_ModelRouterTray.bundle" ]; then
-  rm -rf "$bundle_dir/Contents/Resources/ModelRouterTray_ModelRouterTray.bundle" \
-    "$bundle_dir/ModelRouterTray_ModelRouterTray.bundle"
-  cp -R "$binary_dir/ModelRouterTray_ModelRouterTray.bundle" "$bundle_dir/Contents/Resources/"
+if [ -d "$binary_dir/CodexRouterTray_CodexRouterTray.bundle" ]; then
+  rm -rf "$bundle_dir/Contents/Resources/CodexRouterTray_CodexRouterTray.bundle" \
+    "$bundle_dir/CodexRouterTray_CodexRouterTray.bundle"
+  cp -R "$binary_dir/CodexRouterTray_CodexRouterTray.bundle" "$bundle_dir/Contents/Resources/"
 fi
 rm -rf "$bundle_dir/Contents/PlugIns"
 mkdir -p "$bundle_dir/Contents/PlugIns"
@@ -153,7 +153,7 @@ if [ "$signing_identity" = "-" ]; then
   /usr/bin/codesign --force --sign "$signing_identity" "$bundle_dir"
 else
   /usr/bin/codesign --force --sign "$signing_identity" \
-    --entitlements "$tray_dir/Resources/ModelRouterTray.entitlements" \
+    --entitlements "$tray_dir/Resources/CodexRouterTray.entitlements" \
     "$bundle_dir"
 fi
 /usr/bin/codesign --verify --deep --strict "$bundle_dir"

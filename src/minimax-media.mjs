@@ -302,7 +302,7 @@ export async function runMedia(argv, hooks = {}) {
   if (!credential) {
     throw new Error(
       "No MiniMax Token Plan credential. Store one with: " +
-        "model-router codex provider-key minimax-token-plan set",
+        "codex-router provider-key minimax-token-plan set",
     );
   }
   const quiet = Boolean(options.json);

@@ -537,7 +537,7 @@ if (visionSettings.enabled && !visionEngine) {
       : asked
         ? "enabled, but no enabled provider offers a model that reads images"
         : "on by default, but no enabled provider offers a model that reads images yet",
-    "Enable a provider with a vision model, sign in to ChatGPT, or run ./bin/model-router codex control vision-bridge setup for a local reader.",
+    "Enable a provider with a vision model, sign in to ChatGPT, or run ./bin/codex-router control vision-bridge setup for a local reader.",
   );
 } else if (visionEngine?.local) {
   add(
@@ -552,7 +552,7 @@ if (visionSettings.enabled && !visionEngine) {
     "ok",
     "Vision bridge",
     visionEngine ? `text-only models read images via ${visionEngine.slug}` : "off",
-    "Run ./bin/model-router codex control vision-bridge on to let text-only models read pasted images.",
+    "Run ./bin/codex-router control vision-bridge on to let text-only models read pasted images.",
   );
 }
 // A cooldown is the router declining to send to a provider, which looks
@@ -566,7 +566,7 @@ if (!failoverSettings.enabled) {
     "ok",
     "Model failover",
     "off -- a provider that runs out of usage ends the turn",
-    "Run ./bin/model-router codex control failover on to let a turn continue on another enabled model.",
+    "Run ./bin/codex-router control failover on to let a turn continue on another enabled model.",
   );
 } else if (activeCooldowns.length) {
   add(
@@ -576,14 +576,14 @@ if (!failoverSettings.enabled) {
       .map(([id, entry]) => `${id} until ${entry.until} (${entry.reason || "reported empty"})`)
       .join(", ")}`,
     "Each clears itself at that time, or on the provider's next successful answer. " +
-      "Run ./bin/model-router codex control failover reset to clear them now.",
+      "Run ./bin/codex-router control failover reset to clear them now.",
   );
 } else if (failoverSettings.chain.length) {
   add(
     "ok",
     "Model failover",
     `on, in the order you set: ${failoverSettings.chain.join(" -> ")}`,
-    "Run ./bin/model-router codex control failover auto to hand the order back to the ranking.",
+    "Run ./bin/codex-router control failover auto to hand the order back to the ranking.",
   );
 } else {
   // Count what the ranking can actually reach rather than restating the tier
@@ -600,15 +600,15 @@ if (!failoverSettings.enabled) {
       ? `on, ${failoverCounts.free} free model(s) first then ${failoverCounts.subscription} of your own`
       : `on, ${failoverCounts.subscription} of your own providers -- no free model is curated, so nothing cheaper is tried first`,
     failoverCounts.free
-      ? "Run ./bin/model-router codex control failover chain <model-slug,...> to choose the order yourself."
-      : "Free catalogs change without notice so none are checked in. Run ./bin/model-router codex curate-models opencode-free to give failover a free first stop.",
+      ? "Run ./bin/codex-router control failover chain <model-slug,...> to choose the order yourself."
+      : "Free catalogs change without notice so none are checked in. Run ./bin/codex-router curate-models opencode-free to give failover a free first stop.",
   );
 }
 // The same list the catalog writes definitions from, so a model switched off
 // as a subagent is expected to have no definition rather than a missing one.
 // Codex-only: these are files in Codex's own agents directory, and the harness
 // spawns children through `dsh-tool-subagent` instead
-// (`./bin/model-router dsh subagent-preset`).
+// (`./bin/codex-router dsh subagent-preset`).
 const multiAgentSettings = readMultiAgentSettings();
 const hiddenModels = readHiddenModels();
 const effectiveSubagentModels = applyMultiAgentCapabilities(
@@ -913,7 +913,7 @@ if (TARGET === "gemini") {
           ? `${gemini.managedKeys.join(", ")} in ${gemini.envPath}`
           : `${gemini.envPath} names a base URL this router does not serve (${gemini.baseUrl})`
         : `no managed block in ${gemini.envPath}`,
-      "Run ./bin/model-router gemini enable.",
+      "Run ./bin/codex-router gemini enable.",
     );
     // A managed key assigned outside the block is the failure mode this
     // integration has that the others do not: dotenv lets the last assignment
@@ -927,7 +927,7 @@ if (TARGET === "gemini") {
         : gemini.conflicts.length
           ? gemini.conflicts.map(({ key, line }) => `${key} (line ${line})`).join(", ")
           : "no competing assignments",
-      `Remove or comment out the competing assignments in ${gemini.envPath}, then run ./bin/model-router gemini enable.`,
+      `Remove or comment out the competing assignments in ${gemini.envPath}, then run ./bin/codex-router gemini enable.`,
     );
     // The model list is served live off the router's own catalog, so it cannot
     // drift. The published default model can: it is one slug, written once, and
@@ -942,14 +942,14 @@ if (TARGET === "gemini") {
           ? `${gemini.defaultModel} is no longer routable`
           : gemini.defaultModel
         : "not set; Gemini CLI will use its own default unless --model is passed",
-      "Run ./bin/model-router gemini enable to republish.",
+      "Run ./bin/codex-router gemini enable to republish.",
     );
   } catch (error) {
     add(
       "fail",
       "Gemini routing config",
       error instanceof Error ? error.message : String(error),
-      `Inspect ${GEMINI_ENV_PATH}, then run ./bin/model-router gemini enable.`,
+      `Inspect ${GEMINI_ENV_PATH}, then run ./bin/codex-router gemini enable.`,
     );
   }
 } else if (TARGET === "dsh") {
@@ -961,7 +961,7 @@ if (TARGET === "gemini") {
       dsh.routeInstalled
         ? `llm-pi-ai.providers.${dsh.route} in ${dsh.settings}`
         : dsh.structureError || `no ${dsh.route} route in ${dsh.settings}`,
-      "Run ./bin/model-router dsh enable.",
+      "Run ./bin/codex-router dsh enable.",
     );
     add(
       dsh.credentialInstalled ? "ok" : "fail",
@@ -969,7 +969,7 @@ if (TARGET === "gemini") {
       dsh.credentialInstalled
         ? `stored in ${dsh.credentials}`
         : `missing from ${dsh.credentials}`,
-      "Run ./bin/model-router dsh enable; the route resolves its key by reference, so an absent value fails every request.",
+      "Run ./bin/codex-router dsh enable; the route resolves its key by reference, so an absent value fails every request.",
     );
     // Drift is the failure mode this integration has that Codex's does not:
     // the harness hot-reloads its settings document, so anything else that
@@ -979,14 +979,14 @@ if (TARGET === "gemini") {
       dsh.publishedModels === dsh.routableModels ? "ok" : "warn",
       "Harness catalog freshness",
       `published ${dsh.publishedModels}, routable ${dsh.routableModels}`,
-      "Run ./bin/model-router dsh enable to republish.",
+      "Run ./bin/codex-router dsh enable to republish.",
     );
   } catch (error) {
     add(
       "fail",
       "Harness routing config",
       error instanceof Error ? error.message : String(error),
-      "Inspect $DSH_HOME/settings.yaml, then run ./bin/model-router dsh enable.",
+      "Inspect $DSH_HOME/settings.yaml, then run ./bin/codex-router dsh enable.",
     );
   }
 } else try {
@@ -1081,8 +1081,8 @@ try {
         ? "not shared; the router exposes no native GPT models to other local clients"
         : "not shared and not currently usable; the router exposes no native GPT models to other local clients",
       session.usable
-        ? "To authorize every local router client once, run `./bin/model-router codex chatgpt-session enable`."
-        : "Run `codex login`, then authorize every local router client once with `./bin/model-router codex chatgpt-session enable`.",
+        ? "To authorize every local router client once, run `./bin/codex-router chatgpt-session enable`."
+        : "Run `codex login`, then authorize every local router client once with `./bin/codex-router chatgpt-session enable`.",
     );
   }
 } catch {
@@ -1184,8 +1184,8 @@ if (codexTarget) {
   const status = skillPackStatus(CODEX_HOME);
   const skillOperatorCommand =
     process.platform === "win32"
-      ? ".\\model-router.ps1 codex skills"
-      : "./bin/model-router codex skills";
+      ? ".\\codex-router.ps1 skills"
+      : "./bin/codex-router skills";
   add(
     status.missing.length === 0 ? "ok" : "fail",
     "Codex skill pack",

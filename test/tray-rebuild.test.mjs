@@ -67,7 +67,7 @@ function installCompleteMacosTrayBundle(bundle, { includeWidget = true } = {}) {
     "<plist><dict><key>CFBundleIdentifier</key><string>io.github.codex-router.tray</string></dict></plist>",
     "utf8",
   );
-  const nativeBinary = path.join(bundle, "Contents", "MacOS", "ModelRouterTray");
+  const nativeBinary = path.join(bundle, "Contents", "MacOS", "CodexRouterTray");
   writeFileSync(nativeBinary, "binary", "utf8");
   chmodSync(nativeBinary, 0o755);
   if (includeWidget) {
@@ -156,7 +156,7 @@ test("an installed companion matching its sources is not rebuilt", () => {
 test("changed Swift sources make an installed companion stale", () => {
   const home = scratch();
   const fakeRoot = scratch();
-  const sources = path.join(fakeRoot, "apps", "macos", "ModelRouterTray", "Sources");
+  const sources = path.join(fakeRoot, "apps", "macos", "CodexRouterTray", "Sources");
   try {
     mkdirSync(sources, { recursive: true });
     writeFileSync(path.join(sources, "App.swift"), "let version = 1\n", "utf8");
@@ -458,7 +458,7 @@ test("the macOS tray is signed only after its resources are assembled", () => {
   const resource = script.indexOf('Add :ModelRouterSourceRoot string $repo_dir');
   const storageMode = script.indexOf('Set :ModelRouterWidgetStorageMode $widget_storage_mode');
   const firstSign = script.indexOf('/usr/bin/codesign --force --deep --sign "$signing_identity"');
-  const sign = script.indexOf('--entitlements "$tray_dir/Resources/ModelRouterTray.entitlements"');
+  const sign = script.indexOf('--entitlements "$tray_dir/Resources/CodexRouterTray.entitlements"');
   const verify = script.indexOf('/usr/bin/codesign --verify --deep --strict "$bundle_dir"');
   assert.ok(resource >= 0, "the checkout link must be placed in the bundle");
   assert.match(script, /trap cleanup_electron_output EXIT/);
@@ -480,7 +480,7 @@ test("the macOS tray is signed only after its resources are assembled", () => {
   assert.ok(verify > sign, "the completed signature must be verified");
   assert.doesNotMatch(
     script,
-    /cp -R .*ModelRouterTray_ModelRouterTray\.bundle" "\$bundle_dir\/"/,
+    /cp -R .*CodexRouterTray_CodexRouterTray\.bundle" "\$bundle_dir\/"/,
     "the SwiftPM resource bundle belongs only under Contents/Resources",
   );
 });
@@ -640,7 +640,7 @@ test("committed macOS recovery keeps rollback until every versioned bundle artif
 }, async () => {
   const fixture = macosTransactionFixture({ phase: "committed", artifactSet: "widget-v1" });
   const artifacts = [
-    "Contents/MacOS/ModelRouterTray",
+    "Contents/MacOS/CodexRouterTray",
     "Contents/PlugIns/RouterUsageWidget.appex/Contents/Info.plist",
     "Contents/PlugIns/RouterUsageWidget.appex/Contents/MacOS/RouterUsageWidget",
     "Contents/Resources/Control Center.app/Contents/MacOS/Codex Router",
@@ -834,7 +834,7 @@ test("macOS swap journals reject symlinks, unsafe modes, unknown entries, and im
 });
 
 test("tray updates journal every macOS swap before replacing the live app", () => {
-  const script = readFileSync(path.join(root, "bin", "model-router-tray"), "utf8");
+  const script = readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8");
   const mac = script.slice(script.indexOf("  Darwin)"), script.indexOf("  Linux)"));
   const recover = mac.indexOf("recover_macos_transaction");
   const createJournal = mac.indexOf('mkdir -m 700 "$transaction_dir"');
@@ -894,13 +894,13 @@ test("tray updates journal every macOS swap before replacing the live app", () =
     /readiness_identity=\$\(tray_app_identity "\$bundle_dir"\)[\s\S]*"\$readiness_count" -eq 1[\s\S]*"\$readiness_matches" -eq 1/,
   );
   assert.match(mac, /readiness_count" -gt 1/);
-  assert.doesNotMatch(mac, /killall -QUIT ModelRouterTray|pgrep[\s\S]*(?:ModelRouterTray|Codex Router)/);
+  assert.doesNotMatch(mac, /killall -QUIT CodexRouterTray|pgrep[\s\S]*(?:CodexRouterTray|Codex Router)/);
 
   for (const relative of ["src/update.mjs", "src/control.mjs", "bin/install"]) {
     const caller = readFileSync(path.join(root, relative), "utf8");
     assert.match(
       caller,
-      /model-router-tray[\s\S]{0,300}--preserve-window|--preserve-window[\s\S]{0,300}model-router-tray/,
+      /codex-router-tray[\s\S]{0,300}--preserve-window|--preserve-window[\s\S]{0,300}codex-router-tray/,
       relative + " must preserve window state during automatic replacement",
     );
   }
@@ -922,7 +922,7 @@ test("tray updates journal every macOS swap before replacing the live app", () =
 });
 
 test("a broken embedded renderer remains journaled and rolls back the exact live child", () => {
-  const script = readFileSync(path.join(root, "bin", "model-router-tray"), "utf8");
+  const script = readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8");
   const mac = script.slice(script.indexOf("  Darwin)"), script.indexOf("  Linux)"));
   const probe = mac.indexOf("embedded_renderer_ready=0");
   const failure = mac.indexOf('[ "$embedded_renderer_ready" -ne 1 ]', probe);
@@ -954,7 +954,7 @@ test("a broken embedded renderer remains journaled and rolls back the exact live
 
 test("the macOS host and embedded window prefer the installed owner checkout", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   const explicit = source.indexOf('["CODEX_ROUTER_SOURCE_ROOT", "MODEL_ROUTER_SOURCE_ROOT"]');
@@ -983,7 +983,7 @@ test("the macOS host and embedded window prefer the installed owner checkout", (
 
 test("the native macOS tray owns one embedded Control Center", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   assert.match(source, /ControlCenterLauncher\.open\(\)/);
@@ -1050,8 +1050,8 @@ test("changes to the embedded Control Center make the macOS bundle stale", () =>
 
 test("macOS resource-only changes invalidate the native bundle fingerprint", () => {
   for (const relative of [
-    ["apps", "macos", "ModelRouterTray", "Resources", "AppIcon.icns"],
-    ["apps", "macos", "ModelRouterTray", "Sources", "Resources", "Nested", "future.asset"],
+    ["apps", "macos", "CodexRouterTray", "Resources", "AppIcon.icns"],
+    ["apps", "macos", "CodexRouterTray", "Sources", "Resources", "Nested", "future.asset"],
   ]) {
     const fakeRoot = scratch();
     try {
@@ -1115,7 +1115,7 @@ test("Control Center fingerprints include renderer, build config, and shared ico
 
 test("desktop shells keep their routing mark while the Control Center sidebar stays text-only", () => {
   const script = readFileSync(path.join(root, "scripts", "build-app-icon.sh"), "utf8");
-  assert.match(script, /ModelRouterTray\/Resources\/AppIcon\.svg/);
+  assert.match(script, /CodexRouterTray\/Resources\/AppIcon\.svg/);
   for (const asset of ["32x32.png", "128x128.png", "128x128@2x.png", "icon.png", "icon.ico"]) {
     assert.match(script, new RegExp(`control_center_assets/${asset.replaceAll(".", "\\.")}`));
   }
@@ -1211,7 +1211,7 @@ test("Linux and Windows keep independent build stamps", () => {
 
 test("follow mode rechecks host presence and drains requests before stopping", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   assert.match(source, /hostAppAbsenceGrace = Duration\.seconds\(30\)/);
@@ -1224,7 +1224,7 @@ test("follow mode rechecks host presence and drains requests before stopping", (
 
 test("idle tray updates are deferred, throttled, and finite", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   assert.match(source, /Task \{ @MainActor \[weak self\] in/);
@@ -1245,7 +1245,7 @@ test("idle tray updates are deferred, throttled, and finite", () => {
 // test just wrote.
 test("the fingerprint covers every source file, not just the first", () => {
   for (const [platform, dir, name, other] of [
-    ["darwin", ["apps", "macos", "ModelRouterTray", "Sources"], "Two.swift", "One.swift"],
+    ["darwin", ["apps", "macos", "CodexRouterTray", "Sources"], "Two.swift", "One.swift"],
     ["linux", ["apps", "control-center", "electron"], "two.mjs", "main.mjs"],
   ]) {
     const a = scratch();
@@ -1279,25 +1279,25 @@ test("every tray assertion names its platform instead of inheriting the host", (
 });
 
 // Regression for #180. The mode decision itself is covered by real Swift tests
-// (apps/macos/ModelRouterTray/Tests/IslandModeTests.swift), which CI runs on
+// (apps/macos/CodexRouterTray/Tests/IslandModeTests.swift), which CI runs on
 // the macOS matrix leg -- asserting on the source text of an initializer only
 // ever proved the source said something. What stays here is the wiring those
 // Swift tests cannot see.
 test("the tray ships a Swift test target and CI runs it", () => {
   const manifest = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Package.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Package.swift"),
     "utf8",
   );
-  assert.match(manifest, /\.testTarget\(\s*\n\s*name: "ModelRouterTrayTests"/);
+  assert.match(manifest, /\.testTarget\(\s*\n\s*name: "CodexRouterTrayTests"/);
 
   const workflow = readFileSync(path.join(root, ".github", "workflows", "ci.yml"), "utf8");
-  assert.match(workflow, /working-directory: apps\/macos\/ModelRouterTray\s+run: swift test/);
+  assert.match(workflow, /working-directory: apps\/macos\/CodexRouterTray\s+run: swift test/);
   assert.match(workflow, /if: runner\.os == 'macOS'/);
 });
 
 test("the island mode decision stays pure, so it stays testable", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   // nonisolated because it reads no stored state; if someone reaches for
@@ -1312,7 +1312,7 @@ test("the island mode decision stays pure, so it stays testable", () => {
 
 test("only one process may draw the Island overlay", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "IslandOverlay.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "IslandOverlay.swift"),
     "utf8",
   );
   // An unbundled `swift run` binary has no identifier, reads a different
@@ -1335,16 +1335,16 @@ test("the docs no longer claim the Island is on by default", () => {
 // shipped untranslated. Check every literal against the dictionary here,
 // where it is cheap, instead of noticing it in a screenshot.
 test("every localized tray literal has a Chinese translation", () => {
-  const sources = ["ModelRouterTrayApp.swift", "IslandOverlay.swift", "ThinkingOrbCanvas.swift"]
+  const sources = ["CodexRouterTrayApp.swift", "IslandOverlay.swift", "ThinkingOrbCanvas.swift"]
     .map((name) =>
       readFileSync(
-        path.join(root, "apps", "macos", "ModelRouterTray", "Sources", name),
+        path.join(root, "apps", "macos", "CodexRouterTray", "Sources", name),
         "utf8",
       ),
     )
     .join("\n");
   const catalog = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "Localization.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "Localization.swift"),
     "utf8",
   );
 
@@ -1369,7 +1369,7 @@ test("every localized tray literal has a Chinese translation", () => {
 // Swift tests can cover missing keys without spinning up RouterStore.
 test("menu bar settings resolve through a pure helper", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   assert.match(source, /nonisolated static func resolveMenuBarSettings\(/);
@@ -1387,11 +1387,11 @@ test("menu bar settings resolve through a pure helper", () => {
 
 test("menu bar provider marks reuse ProviderIcon instead of a second map", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   const viewStart = source.indexOf("private struct MenuBarIconView");
-  assert.ok(viewStart > 0, "MenuBarIconView is still in ModelRouterTrayApp.swift");
+  assert.ok(viewStart > 0, "MenuBarIconView is still in CodexRouterTrayApp.swift");
   const view = source.slice(viewStart, source.indexOf("private struct StatusItemLabel"));
   assert.match(view, /ProviderIcon\(providerID:[^\n]*showsHelp: false\)/);
   assert.doesNotMatch(view, /private var assetName:/);
@@ -1400,7 +1400,7 @@ test("menu bar provider marks reuse ProviderIcon instead of a second map", () =>
 
 test("the status item keeps native square geometry in icon-only mode", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   assert.match(source, /static let iconOnlyWidth: CGFloat = standardHeight/);
@@ -1418,14 +1418,14 @@ test("the status item keeps native square geometry in icon-only mode", () => {
 
 test("the active router status is baked into one SVG template image", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   const viewStart = source.indexOf("private struct MenuBarIconView");
   const view = source.slice(viewStart, source.indexOf("private struct StatusItemLabel"));
   assert.match(view, /store\.activityState == \.idle \? "RouterMark" : "RouterMarkActive"/);
   const activeSVG = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "Resources", "RouterMarkActive.svg"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "Resources", "RouterMarkActive.svg"),
     "utf8",
   );
   assert.match(activeSVG, /<circle\b/);
@@ -1433,7 +1433,7 @@ test("the active router status is baked into one SVG template image", () => {
 
 test("a custom menu-bar image is copied into Application Support", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   assert.match(source, /nonisolated static func persistCustomMenuBarIcon\(/);

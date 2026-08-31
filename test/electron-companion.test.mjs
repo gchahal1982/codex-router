@@ -184,7 +184,7 @@ test("the Windows packager can retain an exact rollback package for its caller",
 
 test("platform launchers never choose Tauri by toolchain availability", () => {
   const windows = readFileSync(path.join(root, "codex-router.ps1"), "utf8");
-  const linux = readFileSync(path.join(root, "bin", "model-router-tray"), "utf8");
+  const linux = readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8");
   assert.match(windows, /build-electron-companion\.ps1/);
   assert.match(linux, /build-electron-companion\.sh/);
   assert.doesNotMatch(windows.slice(windows.indexOf('"tray" {')), /Get-Command cargo/);
@@ -192,8 +192,8 @@ test("platform launchers never choose Tauri by toolchain availability", () => {
 });
 
 test("Linux rebuilds use exact process identity and recover from package failure", () => {
-  const scriptPath = path.join(root, "bin", "model-router-tray");
-  const linux = readFileSync(path.join(root, "bin", "model-router-tray"), "utf8");
+  const scriptPath = path.join(root, "bin", "codex-router-tray");
+  const linux = readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8");
   const syntax = spawnSync("sh", ["-n", scriptPath], { encoding: "utf8" });
   assert.equal(syntax.status, 0, syntax.stderr);
   assert.match(linux, /pid_has_base_identity\(\)[\s\S]*\/proc\/\$candidate_pid\/exe/);
@@ -246,7 +246,7 @@ test("Linux rebuilds use exact process identity and recover from package failure
 });
 
 test("Linux lifecycle owners cannot be stale PIDs or Electron Node helpers", () => {
-  const linux = readFileSync(path.join(root, "bin", "model-router-tray"), "utf8");
+  const linux = readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8");
   const identity = linux.match(/pid_has_base_identity\(\) \{[\s\S]*?\n    \}/)?.[0] || "";
   assert.match(identity, /\/proc\/\$candidate_pid\/status/);
   assert.match(identity, /candidate_uid[\s\S]*current_uid/);
@@ -274,8 +274,8 @@ function makeLinuxRecoveryFixture({ phase, hadPrevious, target, backup }) {
   mkdirSync(path.join(fixture, "bin"), { recursive: true });
   mkdirSync(path.join(fixture, "scripts"), { recursive: true });
   mkdirSync(path.join(fixture, "tools"), { recursive: true });
-  const launcher = path.join(fixture, "bin", "model-router-tray");
-  writeFileSync(launcher, readFileSync(path.join(root, "bin", "model-router-tray"), "utf8"));
+  const launcher = path.join(fixture, "bin", "codex-router-tray");
+  writeFileSync(launcher, readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8"));
   chmodSync(launcher, 0o700);
   const builder = path.join(fixture, "scripts", "build-electron-companion.sh");
   writeFileSync(builder, "#!/bin/sh\nexit 42\n");
@@ -355,8 +355,8 @@ test("Linux refuses a linked release root before build or recovery mutation", {
     mkdirSync(path.join(fixture, "scripts"), { recursive: true });
     mkdirSync(path.join(fixture, "tools"), { recursive: true });
     mkdirSync(path.join(fixture, "apps", "control-center"), { recursive: true });
-    const launcher = path.join(fixture, "bin", "model-router-tray");
-    writeFileSync(launcher, readFileSync(path.join(root, "bin", "model-router-tray"), "utf8"));
+    const launcher = path.join(fixture, "bin", "codex-router-tray");
+    writeFileSync(launcher, readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8"));
     chmodSync(launcher, 0o700);
     const builderMarker = path.join(external, "builder-ran");
     const builder = path.join(fixture, "scripts", "build-electron-companion.sh");
@@ -438,8 +438,8 @@ test("Linux refuses an exact canonical GUI when its lifecycle cannot be verified
     mkdirSync(path.join(fixture, "bin"), { recursive: true });
     mkdirSync(path.join(fixture, "scripts"), { recursive: true });
     mkdirSync(path.join(fixture, "tools"), { recursive: true });
-    const launcher = path.join(fixture, "bin", "model-router-tray");
-    writeFileSync(launcher, readFileSync(path.join(root, "bin", "model-router-tray"), "utf8"));
+    const launcher = path.join(fixture, "bin", "codex-router-tray");
+    writeFileSync(launcher, readFileSync(path.join(root, "bin", "codex-router-tray"), "utf8"));
     chmodSync(launcher, 0o700);
     const builder = path.join(fixture, "scripts", "build-electron-companion.sh");
     writeFileSync(builder, [

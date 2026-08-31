@@ -938,7 +938,7 @@ private struct IslandUsageLineChart: View {
 
 
 // Internal rather than private: the status panel's quota-reset rows in
-// ModelRouterTrayApp.swift render the same provider mark.
+// CodexRouterTrayApp.swift renders the same provider mark.
 enum ProviderIconLayout {
   static func fittedRect(sourceRect: NSRect, targetSize: NSSize) -> NSRect {
     guard sourceRect.width > 0, sourceRect.height > 0, targetSize.width > 0, targetSize.height > 0 else {
@@ -1030,7 +1030,7 @@ struct ProviderIcon: View {
     // Installed apps keep SwiftPM resources in the standard sealed resources
     // directory. Bundle.module remains the development fallback for swift run.
     let installedBundle = Bundle.main.resourceURL
-      .map { $0.appendingPathComponent("ModelRouterTray_ModelRouterTray.bundle") }
+      .map { $0.appendingPathComponent("CodexRouterTray_CodexRouterTray.bundle") }
       .flatMap(Bundle.init(url:))
     let resources = installedBundle ?? Bundle.module
     let url = resources.url(

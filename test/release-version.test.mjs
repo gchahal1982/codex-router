@@ -102,11 +102,11 @@ test("releases are tag-driven and validate every asset before publishing", () =>
   assert.match(release, /-ArgumentList "--tray-only"/);
   assert.match(release, /-ArgumentList "--quit-for-update"/);
   assert.match(release, /install -m 0755/);
-  assert.match(release, /model-router-\$\{version\}-linux-x64\.tar\.gz/);
-  assert.doesNotMatch(release, /platform: macos|macos-latest|model-router-\$\{version\}-macos/);
+  assert.match(release, /codex-router-\$\{version\}-linux-x64\.tar\.gz/);
+  assert.doesNotMatch(release, /platform: macos|macos-latest|codex-router-\$\{version\}-macos/);
   assert.match(release, /unsigned tester artifacts/);
   assert.match(release, /matching Codex Router version/);
-  assert.match(release, /sha256sum codex-router-\* model-router-\* > SHA256SUMS/);
+  assert.match(release, /sha256sum codex-router-\* > SHA256SUMS/);
   assert.doesNotMatch(release, /codex-router-desktop|build-desktop-tray/);
   assert.match(release, /actions\/attest-build-provenance@v4/);
   assert.match(release, /gh release create "\$GITHUB_REF_NAME" dist\/\* --verify-tag/);
@@ -122,7 +122,7 @@ test("releases are tag-driven and validate every asset before publishing", () =>
   assert.match(ci, /ModelRouterControlVersion/);
   assert.match(ci, /CFBundleVersion/);
   assert.match(ci, /test "\$actual_build_version" = "\$GITHUB_RUN_NUMBER"/);
-  assert.match(ci, /lipo "\$app\/Contents\/MacOS\/ModelRouterTray" -verify_arch x86_64 arm64/);
+  assert.match(ci, /lipo "\$app\/Contents\/MacOS\/CodexRouterTray" -verify_arch x86_64 arm64/);
   assert.match(
     ci,
     /lipo "\$widget\/Contents\/MacOS\/RouterUsageWidget" -verify_arch x86_64 arm64/,

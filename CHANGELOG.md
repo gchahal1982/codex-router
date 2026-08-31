@@ -1215,7 +1215,7 @@
   runtime the companion needs, so a downloaded binary just runs.
 
 - **The Windows tray is managed the way the macOS one is.** Installing it was
-  possible but nothing else was: `bin/model-router-tray` answered Windows with
+  possible but nothing else was: `bin/codex-router-tray` answered Windows with
   "use scripts/build-desktop-tray.ps1" and `codex-router.ps1` had no `tray`
   verb at all, so where macOS and Linux each have one command that builds the
   companion and hands it to a supervisor, Windows had two incantations and no
@@ -2138,7 +2138,7 @@
 
 - The macOS tray registers itself as a login item on its first launch, so it
   reopens automatically after a reboot instead of requiring a manual
-  `./bin/model-router-tray`. A **Start at login** toggle in the Settings tab
+  `./bin/codex-router-tray`. A **Start at login** toggle in the Settings tab
   (backed by `SMAppService`, also visible in System Settings › Login Items)
   controls it, and the automatic registration happens only once — disabling
   the item is never overridden.

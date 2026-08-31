@@ -370,7 +370,7 @@ enum MenuBarRouterMarkImage {
 }
 
 @main
-struct ModelRouterTrayApp: App {
+struct CodexRouterTrayApp: App {
   @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
   @ObservedObject private var store = RouterStore.shared
 

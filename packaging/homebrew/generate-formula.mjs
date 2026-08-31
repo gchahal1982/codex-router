@@ -305,7 +305,7 @@ ${exclusionComment}${resourceBlocks}
 
     # bin/codex-router is the dispatcher written for exactly this case: a
     # package manager puts one name on PATH, not a directory of them. Routing
-    # through "bin/model-router codex" instead stranded every command outside
+    # through "bin/codex-router" instead stranded every command outside
     # that script's fixed whitelist -- curate-models, discover-models,
     # refresh-catalog, test-model, support-bundle, control -- and made a bare
     # "codex-router" or "codex-router --help" print model-router's usage.

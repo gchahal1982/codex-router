@@ -21,7 +21,7 @@
 		3B7A9C255277C9B13D5B2D66 /* RouterUsageWidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RouterUsageWidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		51F94E830DB20400BCED3A13 /* RouterUsageWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RouterUsageWidget.entitlements; sourceTree = "<group>"; };
 		9BA4BFE9410EB4F466D7308D /* RouterUsageWidget.local.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RouterUsageWidget.local.entitlements; sourceTree = "<group>"; };
-		A061208B3EDCA72A7E3F0467 /* RouterWidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RouterWidgetSnapshot.swift; path = ../ModelRouterTray/Sources/RouterWidgetSnapshot.swift; sourceTree = "<group>"; };
+		A061208B3EDCA72A7E3F0467 /* RouterWidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RouterWidgetSnapshot.swift; path = ../CodexRouterTray/Sources/RouterWidgetSnapshot.swift; sourceTree = "<group>"; };
 		AE16D64298A8C24205D17F37 /* RouterUsageWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouterUsageWidgetBundle.swift; sourceTree = "<group>"; };
 		D2096A00DB21B9FC5A7B4888 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D78E79087D60B4EFCF9962AC /* RouterUsageWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouterUsageWidget.swift; sourceTree = "<group>"; };

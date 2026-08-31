@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 // Follow mode decided whether Codex was open by asking NSRunningApplication for
 // two bundle identifiers. The npm CLI is a plain terminal process and has

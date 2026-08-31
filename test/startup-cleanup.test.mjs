@@ -128,7 +128,7 @@ test("startup failure terminates services that already became healthy", { timeou
     const exit = await waitForStartupExit(child, () => errors);
     assert.equal(exit.signal, null);
     assert.equal(exit.code, 1, errors);
-    assert.match(errors, /\[model-router\] startup failed/);
+    assert.match(errors, /\[codex-router\] startup failed/);
     assert.match(
       errors,
       /startup failed: LiteLLM gateway exited before becoming healthy\./,

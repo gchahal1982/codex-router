@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 /// The tray's provider-catalog panel is a second implementation of a surface
 /// Electron already ships. Everything it agrees with lives in another language
@@ -9,7 +9,7 @@ import Testing
 /// their contents -- a copy that drifts is the whole failure mode here.
 @Suite("Provider catalogs")
 struct ProviderCatalogTests {
-  /// apps/macos/ModelRouterTray/Tests/ThisFile.swift -> repository root.
+  /// apps/macos/CodexRouterTray/Tests/ThisFile.swift -> repository root.
   static let repositoryRoot: URL = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()  // Tests
     .deletingLastPathComponent()  // ModelRouterTray

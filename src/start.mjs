@@ -53,7 +53,7 @@ if (Object.keys(restoredProxy).length > 0) {
     ?? restoredProxy.http_proxy ?? restoredProxy.HTTP_PROXY;
   const shown = redactProxyCredentials({ address }).address;
   console.error(
-    "[model-router] no proxy environment was inherited; restored the installed one" +
+    "[codex-router] no proxy environment was inherited; restored the installed one" +
     `${shown ? ` (${shown})` : ""} from the install manifest.`,
   );
 }
@@ -431,7 +431,7 @@ try {
 } catch (error) {
   if (!shuttingDown) {
     const reason = (error instanceof Error && error.message) || String(error);
-    console.error(`[model-router] startup failed: ${reason}; inspect the service logs above for details.`);
+    console.error(`[codex-router] startup failed: ${reason}; inspect the service logs above for details.`);
     exitCode = 1;
   }
 } finally {

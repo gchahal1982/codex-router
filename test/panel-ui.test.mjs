@@ -315,7 +315,7 @@ test("a read-only surface refuses only what it did not advertise", () => {
 
 test("the macOS tray tool-result-aging switch mirrors the same off default", () => {
   const source = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   assert.match(source, /toolResultAging\?\.enabled \?\? false/);
@@ -324,7 +324,7 @@ test("the macOS tray tool-result-aging switch mirrors the same off default", () 
 
 test("the macOS tray provider toggle uses the atomic selection command", () => {
   const swift = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   ).match(/private func updateProviderSelection[\s\S]*?\r?\n  }\r?\n\r?\n  private func refreshActivity/)?.[0];
   assert.ok(swift, "macOS provider-toggle helper should be readable");
@@ -335,7 +335,7 @@ test("the macOS tray provider toggle uses the atomic selection command", () => {
 
 test("macOS tray credential actions do not race atomic selection publication", () => {
   const swift = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "ModelRouterTrayApp.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
     "utf8",
   );
   const swiftSave = swift.match(/func saveProviderKey[\s\S]*?\r?\n  }\r?\n\r?\n  \/\//)?.[0];

@@ -180,7 +180,7 @@ function refreshTrayCompanion() {
   // starts `control tray refresh` detached after this transaction returns.
   if (process.env.CODEX_ROUTER_DEFER_TRAY_REBUILD === "1") return;
   if (!trayRefreshRequired()) return;
-  const launcher = path.join(SOURCE_ROOT, "bin", "model-router-tray");
+  const launcher = path.join(SOURCE_ROOT, "bin", "codex-router-tray");
   const result = spawnSync(launcher, ["--preserve-window"], {
     cwd: SOURCE_ROOT,
     stdio: "inherit",

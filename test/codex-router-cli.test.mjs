@@ -160,8 +160,8 @@ test("the POSIX dispatcher covers the Windows command set", () => {
   assert.ok(commands.length >= 16, `only found ${commands.length} Windows commands`);
   const posixAliases = {
     "signed-routing": "control",
-    tray: "model-router-tray",
-    companion: "model-router-tray",
+    tray: "codex-router-tray",
+    companion: "codex-router-tray",
   };
   for (const command of commands) {
     // `install` is refused on both sides of the packaged boundary; the Windows

@@ -94,7 +94,7 @@ test("OrcaRouter is a credentialed catalog-only OpenAI provider", () => {
   assert.equal(LISTED_MODELS.some(({ provider: id }) => id === "orca"), false);
 
   const overlay = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "IslandOverlay.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "IslandOverlay.swift"),
     "utf8",
   );
   assert.match(

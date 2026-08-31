@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 @Suite("Thinking orb redraw cadence")
 struct ThinkingOrbCadenceTests {

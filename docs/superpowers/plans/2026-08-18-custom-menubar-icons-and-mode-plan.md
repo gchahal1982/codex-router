@@ -5,7 +5,7 @@
 
 ## Proposed Changes
 
-### Phase 1: Define Enums & Store State in `ModelRouterTrayApp.swift`
+### Phase 1: Define Enums & Store State in `CodexRouterTrayApp.swift`
 1. Define `TrayMenuBarDisplayMode` enum:
    - `standard` ("Standard")
    - `iconOnly` ("Icon only")

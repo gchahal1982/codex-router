@@ -1,4 +1,4 @@
-# Model Router installation instructions
+# Codex Router installation instructions
 
 ## Repository maintenance workflow
 
@@ -100,15 +100,15 @@ user.
    the two.
 5. For Kimi OAuth, reuse a valid `kimi login` session. If login is needed, run
    the official CLI only in an interactive terminal. For API providers, invoke
-   `bin/model-router codex provider-key PROVIDER set` in a PTY so the hidden
+   `bin/codex-router provider-key PROVIDER set` in a PTY so the hidden
    prompt receives the value directly; do not relay it through chat. GitHub
    Copilot requires a fine-grained PAT with the Copilot Requests permission;
    never read or copy the official Copilot CLI credential store. Command
-   Command Code is API-key-only: invoke `bin/model-router codex provider-key
+   Command Code is API-key-only: invoke `bin/codex-router provider-key
     commandcode set` in a PTY so the hidden prompt receives the value directly.
    For Antigravity OAuth, require `ANTIGRAVITY_CLIENT_SECRET` in the installer
    environment, disclose that sign-in may provision a Google Cloud project for
-   the account when none exists, then run `bin/model-router codex providers
+   the account when none exists, then run `bin/codex-router providers
    login antigravity-oauth`; never ask the user to paste the secret into chat.
    A key does not mean every account may use the Provider API: the Go plan is
    refused with "Your Go plan doesn't include API access". GOAT, Pro, Max, Team,
@@ -126,11 +126,11 @@ user.
    `./install.ps1 -Target codex -Auto -Providers IDS -MigrateKnown`. Omit the
    migration flag when detection found nothing. Do not enable the smoke test
    unless the user agrees to a quota-consuming request.
-8. Run `bin/model-router codex doctor` (or
-   `./model-router.ps1 codex doctor` on Windows). Core config, config privacy,
+8. Run `bin/codex-router doctor` (or
+   `./codex-router.ps1 doctor` on Windows). Core config, config privacy,
    catalog, caller capability, internal key, service, router health, and
    selected credentials must be `OK`. Unselected credentials may be `WARN`.
-9. If a managed layer fails, use `model-router codex doctor --fix`; add
+9. If a managed layer fails, use `codex-router doctor --fix`; add
    `--migrate-known` only for a recognized older installation. Repair rebuilds
    the Node and Python dependencies unconditionally, unlike a normal install or
    update, which skips whichever dependency step already matches its
@@ -159,7 +159,7 @@ nothing to restart and nothing to tell the user to quit.
    `./install.ps1 -Target dsh -Auto -Providers IDS` (Windows).
    `--migrate-known` and `--adopt-native-catalog` are refused here: both act on
    Codex's own configuration, and the harness has no counterpart to either.
-3. Run `bin/model-router dsh doctor`. "Harness routing config", "Harness caller
+3. Run `bin/codex-router dsh doctor`. "Harness routing config", "Harness caller
    credential", "Harness settings privacy", and "Harness catalog freshness"
    must be `OK`, alongside the shared-plane checks.
 4. Do not tell the user to restart the harness. `dsh-settings-file` watches the
@@ -183,7 +183,7 @@ file, never open its `settings.json` for writing, and leave the user's next
    `./install.ps1 -Target gemini -Auto -Providers IDS` (Windows).
    `--migrate-known` and `--adopt-native-catalog` are refused here: both act on
    Codex's own configuration.
-3. Run `bin/model-router gemini doctor`. "Gemini routing config", "Gemini
+3. Run `bin/codex-router gemini doctor`. "Gemini routing config", "Gemini
    environment conflicts", "Gemini environment privacy", and "Gemini default
    model" must be `OK`, alongside the shared-plane checks.
 4. Do not tell the user to quit anything. Gemini CLI reads its environment once,
@@ -368,7 +368,7 @@ beside ours, so everything else in them is somebody else's work.
    model and must not edit a preset it does not own. A child with no model of
    its own inherits the default model selection, which is already a routed
    model once the route is the default;
-   `./bin/model-router dsh subagent-preset` prints the block to paste for a
+   `./bin/codex-router dsh subagent-preset` prints the block to paste for a
    deployment that wants children on a *different* routed model. Codex's
    `bin/multi-agent` stays Codex-only: it drives `multi_agent_version` and the
    Codex agents directory, whose payloads are Codex's own encrypted format.
@@ -583,16 +583,16 @@ to ship tested support to every installer.
 ### Add models for the current user
 
 1. Inspect the installed selection with
-   `./bin/model-router codex providers list --json`. Do not assume that a stored
+   `./bin/codex-router providers list --json`. Do not assume that a stored
    credential means the provider is intentionally visible.
 2. If authentication is missing, use the provider's official OAuth CLI or run
-   `./bin/model-router codex provider-key PROVIDER set` in a PTY. Keep secrets
+   `./bin/codex-router provider-key PROVIDER set` in a PTY. Keep secrets
    out of chat, arguments, logs, environment snippets, and tracked files.
 3. If the requested model is already checked into the registry tree under
    `config/` (one vendor directory holding a `<vendor>.json` provider file
    plus per-access-method `models.json` fragments, e.g.
    `config/kimi/kimi.json` and `config/kimi/oauth/models.json`), run
-   `./bin/model-router codex providers enable PROVIDER`. This preserves the
+   `./bin/codex-router providers enable PROVIDER`. This preserves the
    other selected providers and refreshes the installed picker catalog.
 4. If the provider is registered but the model is not checked in, run
    `./bin/curate-models PROVIDER` in an interactive terminal. When the user gave
@@ -647,7 +647,7 @@ to ship tested support to every installer.
    as a provider-wide default. Never widen it by changing what
    `src/compatibility-test.mjs` sends: the probe must keep sending `required`,
    or it stops proving tool calling works for every other provider.
-7. Run `./bin/model-router codex doctor`. A live `bin/test-model` request uses
+7. Run `./bin/codex-router doctor`. A live `bin/test-model` request uses
    provider quota, so run it only with the user's approval. Finally, tell the
    user to fully quit and reopen Codex before checking the picker.
 
@@ -805,8 +805,8 @@ surfaces.
 1. **One-click install.** The provider ID must work end to end with no manual
    config edits: selectable through `install.sh --providers` /
    `install.ps1 -Providers`, through
-   `bin/model-router codex providers enable PROVIDER`, and reported correctly
-   by `bin/model-router codex doctor`. If the provider ships no preselected
+   `bin/codex-router providers enable PROVIDER`, and reported correctly
+   by `bin/codex-router doctor`. If the provider ships no preselected
    models, document it as catalog-only and make sure `bin/curate-models`
    handles it.
 2. **Tray setup section.** Every provider must appear in the macOS tray with a
@@ -830,7 +830,7 @@ surfaces.
      is the house rule for every provider, OAuth or CLI-session: implement it
      without asking.
    - Add the provider icon under
-     `apps/macos/ModelRouterTray/Resources/` and record its source in
+     `apps/macos/CodexRouterTray/Resources/` and record its source in
      `PROVIDER-ICON-SOURCES.md`.
 3. **Plan entitlement.** When a provider's credential can authenticate an
    account whose plan still may not call the API, set `planNote` on its
@@ -1487,7 +1487,7 @@ router is verified up before Codex starts. Installing a file that shadows a
 command the user already has is a change only they may authorize.
 
 1. Never install it from `install.sh`, `install.ps1`, `doctor --fix`, or any
-   automatic repair. It ships behind `model-router codex shim install` only.
+   automatic repair. It ships behind `codex-router shim install` only.
 2. Never write into a PATH directory outside the user's home directory. A shim
    in `/usr/local/bin` changes `codex` for every account on the machine.
 3. Never overwrite or delete a `codex` that does not carry `SHIM_MARKER`.
@@ -1515,12 +1515,12 @@ stopped the router 30 seconds into the user's work.
 Detection must cover both — bundle identifiers for the apps, and a process-table
 scan for the CLI. Keep the scan in `sysctl`; it runs every five seconds for the
 life of the session, and spawning `pgrep` on that cadence is a cost the check
-does not justify. `apps/macos/ModelRouterTray/Tests/HostProcessDetectionTests.swift`
+does not justify. `apps/macos/CodexRouterTray/Tests/HostProcessDetectionTests.swift`
 guards it.
 
 ## The macOS app icon is committed, not built during a tray build
 
-`apps/macos/ModelRouterTray/Resources/AppIcon.svg` is the source and
+`apps/macos/CodexRouterTray/Resources/AppIcon.svg` is the source and
 `AppIcon.icns` beside it is the committed output of `scripts/build-app-icon.sh`.
 Regenerate and commit both together after editing the SVG. Do not make
 `scripts/build-macos-tray-app.sh` rasterize the icon: it would put `sips` and

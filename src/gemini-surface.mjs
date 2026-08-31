@@ -77,7 +77,7 @@ function transportRejected(request, response) {
     geminiError(
       response,
       403,
-      "Browser-originated requests are not accepted by the local model router.",
+      "Browser-originated requests are not accepted by the local Codex Router.",
     );
     return true;
   }
@@ -213,7 +213,7 @@ async function relayTurn({ response, model, body, stream, responsesUrl, fetchImp
     geminiError(
       response,
       502,
-      `The local model router could not be reached: ${formatErrorChain(error, { messages: false })}`,
+      `The local Codex Router could not be reached: ${formatErrorChain(error, { messages: false })}`,
     );
     return;
   }
@@ -223,7 +223,7 @@ async function relayTurn({ response, model, body, stream, responsesUrl, fetchImp
     geminiError(
       response,
       upstream.status,
-      upstreamMessage(text) || "The local model router refused the request.",
+      upstreamMessage(text) || "The local Codex Router refused the request.",
     );
     return;
   }
@@ -231,7 +231,7 @@ async function relayTurn({ response, model, body, stream, responsesUrl, fetchImp
     const answered = await upstream.json().catch(() => undefined);
     client.release();
     if (!answered) {
-      geminiError(response, 502, "The local model router returned an unreadable response.");
+      geminiError(response, 502, "The local Codex Router returned an unreadable response.");
       return;
     }
     writeJson(response, 200, responsesPayloadToGemini(answered, { model }));

@@ -97,7 +97,7 @@ test(
   "the POSIX tray launcher refuses to build inside a Homebrew installation",
   { skip: process.platform === "win32" },
   () => {
-    const result = spawnSync(path.join(root, "bin", "model-router-tray"), [], {
+    const result = spawnSync(path.join(root, "bin", "codex-router-tray"), [], {
       encoding: "utf8",
       env: { ...process.env, CODEX_ROUTER_PACKAGE_MANAGER: "homebrew" },
     });

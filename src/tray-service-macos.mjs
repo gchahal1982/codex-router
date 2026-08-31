@@ -145,7 +145,7 @@ if (command === "render") {
   setTraySupervisionPreference(true);
   if (!existsSync(TRAY_APP_BINARY)) {
     throw new Error(
-      `The tray app is not built at ${TRAY_APP_PATH}. Run ./bin/model-router-tray first.`,
+      `The tray app is not built at ${TRAY_APP_PATH}. Run ./bin/codex-router-tray first.`,
     );
   }
   bootout();

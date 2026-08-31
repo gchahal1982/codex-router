@@ -49,10 +49,10 @@ the same Apple team with that App Group provisioned for both bundle identifiers.
 
 ## Opening it like an app
 
-`./bin/model-router-tray` installs **Codex Router.app** into `~/Applications`,
+`./bin/codex-router-tray` installs **Codex Router.app** into `~/Applications`,
 where Finder, Spotlight, and Launchpad can all find it by name and icon. Every
 desktop icon is built from
-`apps/macos/ModelRouterTray/Resources/AppIcon.svg`; edit the SVG and run
+`apps/macos/CodexRouterTray/Resources/AppIcon.svg`; edit the SVG and run
 `scripts/build-app-icon.sh` to regenerate the committed native `.icns` plus
 the Control Center PNG and ICO assets used by the sidebar, Dock, Windows, and
 Linux. That script needs `sips` and `iconutil`, which is why the generated
@@ -73,7 +73,7 @@ hidden surfaces visible, so follow mode is not overridden every morning.
 
 ## launchd supervision and login startup
 
-`./bin/model-router-tray` installs a per-user LaunchAgent for the native host.
+`./bin/codex-router-tray` installs a per-user LaunchAgent for the native host.
 It starts the app at login and restarts it after an abnormal exit, while a clean
 **Quit** remains a quit until the next login or manual launch. The app does not
 register a second startup mechanism; there is one startup owner and therefore
@@ -236,7 +236,7 @@ popover.
 Run it from a stable checkout on macOS:
 
 ```sh
-./bin/model-router-tray
+./bin/codex-router-tray
 ```
 
 The command builds and verifies a staging bundle, atomically installs it as
@@ -244,7 +244,7 @@ The command builds and verifies a staging bundle, atomically installs it as
 The installed bundle records the checkout path used at build time, so rebuild
 it after moving the repository.
 
-`bin/model-router-tray` lets active Control Center mutations drain, replaces the
+`bin/codex-router-tray` lets active Control Center mutations drain, replaces the
 already-running bundle, and restarts its launchd agent. `codex update` rebuilds
 and relaunches the installed app from the updated checkout, so the companion
 stays current without creating a second app copy.

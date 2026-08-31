@@ -59,7 +59,7 @@ test("the router never reports itself as the client", () => {
     spawn: fakePs([
       [700, 1, "/usr/local/bin/node /Users/x/codex-router/src/router.mjs"],
       [701, 1, "/usr/local/bin/node /Users/x/codex-router/src/start.mjs"],
-      [702, 1, "/Users/x/Applications/Codex Router.app/Contents/MacOS/ModelRouterTray"],
+      [702, 1, "/Users/x/Applications/Codex Router.app/Contents/MacOS/CodexRouterTray"],
     ]),
   });
   assert.deepEqual(found, []);

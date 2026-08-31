@@ -84,16 +84,16 @@ jobs:
             mapfile -t installers < <(find apps/control-center/release -maxdepth 1 -type f -name '*.exe' -print)
             test "${#installers[@]}" -eq 1
             cp "${installers[0]}" \
-              "staged/model-router-${version}-windows-x64.exe"
+              "staged/codex-router-${version}-windows-x64.exe"
           else
             (cd apps/control-center && npx --no-install electron-builder --linux --publish never)
             mapfile -t appimages < <(find apps/control-center/release -maxdepth 1 -type f -name '*.AppImage' -print)
             test "${#appimages[@]}" -eq 1
-            package_dir="$RUNNER_TEMP/model-router-linux-package"
-            package_name="model-router-${version}-linux-x64.AppImage"
+            package_dir="$RUNNER_TEMP/codex-router-linux-package"
+            package_name="codex-router-${version}-linux-x64.AppImage"
             mkdir -p "$package_dir"
             install -m 0755 "${appimages[0]}" "$package_dir/$package_name"
-            tar -czf "staged/model-router-${version}-linux-x64.tar.gz" \
+            tar -czf "staged/codex-router-${version}-linux-x64.tar.gz" \
               -C "$package_dir" "$package_name"
           fi
       - name: Smoke the packaged Linux application
@@ -226,7 +226,7 @@ jobs:
         shell: bash
         run: |
           cd dist
-          sha256sum codex-router-* model-router-* > SHA256SUMS
+          sha256sum codex-router-* > SHA256SUMS
       - uses: actions/attest-build-provenance@v4
         with:
           subject-path: "dist/*"

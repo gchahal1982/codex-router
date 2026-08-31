@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 // Serialized: these mutate RouterLanguage.selection, a process-wide value.
 // Parallel cases would clobber each other's language mid-assertion.

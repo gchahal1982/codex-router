@@ -244,14 +244,14 @@ function controlCenterSources(root) {
 const TRAY_PLATFORMS = {
   darwin: {
     sources: (root) => {
-      const base = path.join(root, "apps", "macos", "ModelRouterTray");
+      const base = path.join(root, "apps", "macos", "CodexRouterTray");
       const widget = path.join(root, "apps", "macos", "RouterUsageWidget");
       return [
         path.join(root, "scripts", "build-macos-tray-app.sh"),
         path.join(root, "scripts", "build-macos-widget.sh"),
         path.join(base, "Package.swift"),
         path.join(base, "Resources", "Info.plist"),
-        path.join(base, "Resources", "ModelRouterTray.entitlements"),
+        path.join(base, "Resources", "CodexRouterTray.entitlements"),
         path.join(base, "Resources", "AppIcon.icns"),
         ...sourceFilesIn(path.join(base, "Sources"), [".swift"]),
         // SwiftPM copies this tree recursively into the resource bundle. Every
@@ -280,7 +280,7 @@ const TRAY_PLATFORMS = {
         "Contents",
       );
       return [
-        path.join(bundle, "Contents", "MacOS", "ModelRouterTray"),
+        path.join(bundle, "Contents", "MacOS", "CodexRouterTray"),
         path.join(
           bundle,
           "Contents",

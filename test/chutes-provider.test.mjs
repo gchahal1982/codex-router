@@ -48,7 +48,7 @@ function writeChutesCredential(testRoot, value = "TEST_CHUTES_PERSISTENT_KEY") {
 
 test("the macOS tray labels Chutes as a metered API route", () => {
   const overlay = readFileSync(
-    path.join(root, "apps", "macos", "ModelRouterTray", "Sources", "IslandOverlay.swift"),
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "IslandOverlay.swift"),
     "utf8",
   );
   const sourceLabel = overlay.slice(

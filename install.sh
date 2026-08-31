@@ -228,7 +228,7 @@ case "$0" in
     if [ -n "$candidate_dir" ] &&
       [ -x "$candidate_dir/bin/install" ] &&
       [ -f "$candidate_dir/package.json" ] &&
-      grep -q '"name": "codex-model-router"' "$candidate_dir/package.json"; then
+      grep -q '"name": "codex-router"' "$candidate_dir/package.json"; then
       repo_dir=$candidate_dir
     fi
     ;;

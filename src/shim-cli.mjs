@@ -61,7 +61,7 @@ try {
       for (const file of result.removed) process.stdout.write(`Removed ${file}\n`);
     }
   } else {
-    process.stderr.write("Usage: model-router codex shim status|install|uninstall [--json]\n");
+    process.stderr.write("Usage: codex-router shim status|install|uninstall [--json]\n");
     process.exit(2);
   }
 } catch (error) {

@@ -156,7 +156,7 @@ test("the generated formula owns upgrades and preserves one-time setup", () => {
   assert.match(formula, /install_plan = libexec\/"src\/install-plan\.mjs"/);
   assert.match(formula, /if install_plan\.exist\?/);
   assert.match(formula, /install_plan, "record", "node-deps"/);
-  // #334: the PATH shim used to exec `bin/model-router codex`, whose fixed
+  // #334: the PATH shim used to exec `bin/codex-router`, whose fixed
   // whitelist stranded curate-models, discover-models, refresh-catalog,
   // test-model, support-bundle and control, and made a bare `codex-router`
   // print the wrong usage. It must go through the packaged dispatcher.

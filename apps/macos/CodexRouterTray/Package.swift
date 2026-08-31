@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-  name: "ModelRouterTray",
+  name: "CodexRouterTray",
   defaultLocalization: "en",
   platforms: [.macOS(.v13)],
   products: [
-    .executable(name: "ModelRouterTray", targets: ["ModelRouterTray"]),
+    .executable(name: "CodexRouterTray", targets: ["CodexRouterTray"]),
   ],
   targets: [
     .executableTarget(
-      name: "ModelRouterTray",
+      name: "CodexRouterTray",
       path: "Sources",
       resources: [.process("Resources")]
     ),
@@ -18,8 +18,8 @@ let package = Package(
     // test/tray-rebuild.test.mjs as a regex over the source text -- which
     // proves the source says something, not that it does something.
     .testTarget(
-      name: "ModelRouterTrayTests",
-      dependencies: ["ModelRouterTray"],
+      name: "CodexRouterTrayTests",
+      dependencies: ["CodexRouterTray"],
       path: "Tests"
     ),
   ],

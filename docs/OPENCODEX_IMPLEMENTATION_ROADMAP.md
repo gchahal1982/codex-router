@@ -31,7 +31,7 @@ current `main`:
 | Web search | Native Codex standalone search and provider-specific hosted search are preserved where the selected route supports them. There is no provider-agnostic search sidecar. | `src/config-manager.mjs`, `src/grok-oauth-forwarder.mjs`, `src/catalog.mjs`, `docs/HOW-IT-WORKS.md` |
 | Sub-agents | The router publishes the registry's verified v1/v2 collaboration metadata and manages the structured `multi_agent_v2` setting. The managed concurrency value is **6**; user-owned settings remain authoritative. | `src/multi-agent-state.mjs`, `src/subagent-proofs.mjs`, `src/config-manager.mjs`, `test/config-manager.test.mjs`, `test/subagent-*.test.mjs` |
 | Local models | Ollama, LM Studio, MLX, and other explicitly configured local paths are opt-in and remain loopback-bound. | `src/local-models.mjs`, `src/lmstudio-models.mjs`, `src/local-mlx.mjs`, `test/lmstudio-provider.test.mjs`, `test/local-models.test.mjs`, `README.md` |
-| Control surfaces | The macOS tray and Control Center expose the shipped provider, model, usage, health, local-model, and target controls using the existing visual language. | `apps/macos/ModelRouterTray`, `apps/control-center`, `test/control-center-electron.test.mjs`, Swift package tests |
+| Control surfaces | The macOS tray and Control Center expose the shipped provider, model, usage, health, local-model, and target controls using the existing visual language. | `apps/macos/CodexRouterTray`, `apps/control-center`, `test/control-center-electron.test.mjs`, Swift package tests |
 
 The router currently has one active credential per configured API-provider
 entry. It does not provide a provider-neutral API-key pool or a multi-account

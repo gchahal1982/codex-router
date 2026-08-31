@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 // The status panel's quota-reset rows pair a countdown with a clock time so
 // the 5-hour, weekly, and monthly windows read at a glance. The language is

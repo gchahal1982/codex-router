@@ -1,6 +1,6 @@
 import Testing
 
-@testable import ModelRouterTray
+@testable import CodexRouterTray
 
 // Regression for #180. The overlay covers the notch on every display, so which
 // mode a launch resolves to is the whole behavior of that issue.

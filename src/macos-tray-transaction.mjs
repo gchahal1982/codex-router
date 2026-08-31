@@ -230,7 +230,7 @@ export async function inspectMacosTrayCommittedBundle(
   }
   const requiredFiles = [
     ["Contents/Info.plist", false],
-    ["Contents/MacOS/ModelRouterTray", true],
+    ["Contents/MacOS/CodexRouterTray", true],
     ["Contents/Resources/Control Center.app/Contents/MacOS/Codex Router", true],
     ["Contents/Resources/Control Center.app/Contents/Resources/app.asar", false],
   ];

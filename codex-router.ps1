@@ -864,7 +864,7 @@ switch ($Command) {
   "skills" { Invoke-RouterNode "src\skills-install.mjs" $Arguments }
   # `bin/install` accepts --prepare-only/--migrate-known/--force-deps, so the
   # Windows wrapper has to pass the equivalent switches through instead of
-  # dropping them; `./model-router.ps1 codex install -ForceDeps` was silently
+  # dropping them; `./codex-router.ps1 install -ForceDeps` was silently
   # running a plain install.
   "install" { & (Join-Path $Root "install.ps1") -CheckoutInstall -Target $Target @Arguments }
   "enable" { & (Join-Path $Root "install.ps1") -CheckoutInstall -Target $Target @Arguments }
@@ -905,9 +905,9 @@ switch ($Command) {
   # The companion with nothing to build and nothing to download. The router is
   # already serving it; this is the one thing that knows the address.
   "panel" { Invoke-RouterNode "src\panel.mjs" $Arguments }
-  # The Windows counterpart of ./bin/model-router-tray. Before this, macOS and
+  # The Windows counterpart of ./bin/codex-router-tray. Before this, macOS and
   # Linux had one command that built and supervised the companion and Windows
-  # had none -- bin/model-router-tray only told you to go read a build script.
+  # had none -- bin/codex-router-tray only told you to go read a build script.
   # Build when the sources moved, then hand it to Task Scheduler, which starts
   # it now and again at every logon.
   "tray" {
