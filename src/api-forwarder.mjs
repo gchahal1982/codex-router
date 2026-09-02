@@ -51,6 +51,7 @@ import { VERSION } from "./version.mjs";
 import { installStableFetchTransport } from "./fetch-transport.mjs";
 import { zaiCacheUsageTransform } from "./zai-cache-usage.mjs";
 import {
+  buildNamespaceLookupsFromTools,
   createResponsesJsonTransform,
   createResponsesStreamTransform,
   normalizeOpenAIRequest,
@@ -1063,9 +1064,17 @@ async function relayUpstreamResponse(
     upstream.ok && upstreamContentType.toLowerCase().includes("text/event-stream");
   const responsesJson = normalized.responseAdapter === "responses" &&
     upstream.ok && upstreamContentType.toLowerCase().includes("application/json");
+  
+  // Build namespace lookups from the flattened tools in the request payload
+  // to restore namespaced function calls (e.g., "multi_agent_v1__spawn_agent" 
+  // back to { namespace: "multi_agent_v1", name: "spawn_agent" })
+  const flatToNative = (responsesStream || responsesJson)
+    ? buildNamespaceLookupsFromTools(normalized.payload?.tools)
+    : new Map();
+  
   const transform = [
-    responsesStream ? createResponsesStreamTransform() : undefined,
-    responsesJson ? createResponsesJsonTransform() : undefined,
+    responsesStream ? createResponsesStreamTransform(flatToNative) : undefined,
+    responsesJson ? createResponsesJsonTransform(flatToNative) : undefined,
     zaiCacheUsageTransform(normalized.provider.id, upstreamContentType),
   ].filter(Boolean);
   const denylist = transform.length
