@@ -3,37 +3,67 @@ import { Transform } from "node:stream";
 const RESPONSE_PROTOCOL = "openai-responses";
 const NAMESPACE_DELIMITER = "__";
 
-// Build a lookup map from flattened tool names (e.g. "multi_agent_v1__spawn_agent")
-// back to their native namespaced form { namespace: "multi_agent_v1", name: "spawn_agent" }
+// Known collaboration namespaces that require restoration. This is the exact
+// set of v1/v2 native collaboration tools that Codex flattens and expects to
+// see restored. MCP tools (mcp__*) are never restored here - they follow a
+// different flatten contract and are handled by namespace-relay.mjs.
+const COLLABORATION_NAMESPACES = new Set([
+  "multi_agent_v1",
+  "collaboration", // v2 native collaboration namespace
+]);
+
+// Build a lookup map from flattened collaboration tool names back to their
+// native namespaced form. Only restores tools from actual type: "namespace"
+// entries in the request, or known collaboration namespaces. This prevents
+// false positives like treating "mcp__node_repl__js" as a collaboration tool.
 export function buildNamespaceLookupsFromTools(tools) {
   const flatToNative = new Map();
   if (!Array.isArray(tools)) return flatToNative;
   
+  // First, collect namespace tools to build the authoritative mapping
+  const namespaceTools = new Map();
   for (const tool of tools) {
     if (!tool || typeof tool !== "object" || Array.isArray(tool)) continue;
+    
+    if (tool.type === "namespace" && typeof tool.name === "string" && Array.isArray(tool.tools)) {
+      // This is a type: "namespace" entry, record all its child tools
+      for (const child of tool.tools) {
+        if (child?.type !== "function" || typeof child.name !== "string" || !child.name) continue;
+        const flattenedName = `${tool.name}${NAMESPACE_DELIMITER}${child.name}`;
+        namespaceTools.set(flattenedName, { namespace: tool.name, name: child.name });
+      }
+    }
+  }
+  
+  // Second pass: look for flattened function names
+  for (const tool of tools) {
+    if (!tool || typeof tool !== "object" || Array.isArray(tool)) continue;
+    if (tool.type === "namespace") continue; // Skip namespace containers
     
     // Extract function name from either Responses format (tool.name) or 
     // Chat Completions format (tool.function.name)
     const functionName = tool.name || tool.function?.name;
     if (typeof functionName !== "string" || !functionName) continue;
     
-    // Check if this looks like a flattened namespace call
+    // Check if this looks like a flattened name
     const delimiterIndex = functionName.indexOf(NAMESPACE_DELIMITER);
     if (delimiterIndex === -1) continue;
     
-    // Split on the first delimiter only - namespace names themselves can contain delimiters
-    // e.g. "mcp__node_repl__js" -> namespace: "mcp__node_repl", name: "js"
-    // But for collaboration tools, it's simpler: "multi_agent_v1__spawn_agent"
-    const parts = functionName.split(NAMESPACE_DELIMITER);
-    if (parts.length < 2) continue;
+    // If this name was from a namespace tool, use that mapping
+    if (namespaceTools.has(functionName)) {
+      flatToNative.set(functionName, namespaceTools.get(functionName));
+      continue;
+    }
     
-    // For safety, only restore known collaboration namespaces to avoid false positives
-    // The first part before __ is the namespace candidate
-    const namespace = parts[0];
-    const name = parts.slice(1).join(NAMESPACE_DELIMITER);
+    // Otherwise, only restore known collaboration namespaces to avoid false positives
+    // Split on first delimiter: "multi_agent_v1__spawn_agent" -> ["multi_agent_v1", "spawn_agent"]
+    const firstDelimiterEnd = delimiterIndex + NAMESPACE_DELIMITER.length;
+    const namespace = functionName.substring(0, delimiterIndex);
+    const name = functionName.substring(firstDelimiterEnd);
     
-    // Store the mapping from flattened name to native shape
-    flatToNative.set(functionName, { namespace, name });
+    if (COLLABORATION_NAMESPACES.has(namespace)) {
+      flatToNative.set(functionName, { namespace, name });
+    }
   }
   
   return flatToNative;

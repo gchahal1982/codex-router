@@ -93,12 +93,29 @@ test("buildNamespaceLookupsFromTools handles Chat Completions format", () => {
   assert.equal(spawnAgent.name, "spawn_agent");
 });
 
-test("buildNamespaceLookupsFromTools handles nested namespaces", () => {
+test("buildNamespaceLookupsFromTools handles namespace tools with nested names", () => {
+  // When a tool comes from a type: "namespace" entry with a nested name,
+  // it should be restored correctly
   const tools = [
+    {
+      type: "namespace",
+      name: "mcp__node_repl",
+      tools: [
+        {
+          type: "function",
+          name: "execute",
+          description: "Execute code",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      ],
+    },
     {
       type: "function",
       name: "mcp__node_repl__execute",
-      description: "Execute code",
+      description: "Execute code (flattened)",
       parameters: {
         type: "object",
         properties: {},
@@ -110,9 +127,10 @@ test("buildNamespaceLookupsFromTools handles nested namespaces", () => {
 
   assert.equal(lookups.size, 1);
   const execute = lookups.get("mcp__node_repl__execute");
-  // Only split on the first delimiter
-  assert.equal(execute.namespace, "mcp");
-  assert.equal(execute.name, "node_repl__execute");
+  assert.ok(execute, "Should restore tool from namespace entry");
+  // Namespace preserves the full nested name
+  assert.equal(execute.namespace, "mcp__node_repl");
+  assert.equal(execute.name, "execute");
 });
 
 test("createResponsesStreamTransform restores namespaced function calls", async () => {
@@ -314,5 +332,126 @@ test("transforms work with empty lookups", async () => {
 
   // Function should remain unchanged
   assert.equal(output.output[0].name, "some_function");
+  assert.equal(output.output[0].namespace, undefined);
+});
+
+test("buildNamespaceLookupsFromTools ignores MCP-style names without namespace tools", () => {
+  // MCP tools like "mcp__node_repl__js" should NOT be restored unless they
+  // came from an actual type: "namespace" entry in the request
+  const tools = [
+    {
+      type: "function",
+      name: "mcp__node_repl__js",
+      description: "Execute JavaScript",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      type: "function",
+      name: "some__other__tool",
+      description: "Some tool with delimiters",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  ];
+
+  const lookups = buildNamespaceLookupsFromTools(tools);
+
+  // Should be empty because "mcp" and "some" are not known collaboration namespaces
+  // and there are no type: "namespace" entries
+  assert.equal(lookups.size, 0);
+  assert.equal(lookups.get("mcp__node_repl__js"), undefined);
+  assert.equal(lookups.get("some__other__tool"), undefined);
+});
+
+test("buildNamespaceLookupsFromTools restores tools from namespace entries", () => {
+  // When tools come from actual type: "namespace" entries, they should be restored
+  const tools = [
+    {
+      type: "namespace",
+      name: "mcp__node_repl",
+      tools: [
+        {
+          type: "function",
+          name: "execute",
+          description: "Execute code",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      ],
+    },
+    {
+      type: "function",
+      name: "mcp__node_repl__execute",
+      description: "Execute code",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  ];
+
+  const lookups = buildNamespaceLookupsFromTools(tools);
+
+  // Should restore the tool that came from a namespace entry
+  assert.equal(lookups.size, 1);
+  const restored = lookups.get("mcp__node_repl__execute");
+  assert.ok(restored, "Should restore tool from namespace entry");
+  assert.equal(restored.namespace, "mcp__node_repl");
+  assert.equal(restored.name, "execute");
+});
+
+test("MCP-style names are left unchanged in responses without namespace tools", async () => {
+  // Verify that MCP-style function calls are NOT restored unless they came from namespace tools
+  const tools = [
+    {
+      type: "function",
+      name: "mcp__node_repl__js",
+      description: "Execute JavaScript",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  ];
+
+  const lookups = buildNamespaceLookupsFromTools(tools);
+  const transform = createResponsesJsonTransform(lookups);
+
+  const jsonInput = JSON.stringify({
+    id: "resp_123",
+    output: [
+      {
+        type: "function_call",
+        id: "call_123",
+        name: "mcp__node_repl__js",
+        arguments: '{"code":"console.log()"}',
+        call_id: "call_123",
+      },
+    ],
+  });
+
+  const chunks = [];
+  transform.on("data", (chunk) => {
+    chunks.push(chunk.toString("utf8"));
+  });
+
+  await new Promise((resolve, reject) => {
+    transform.on("end", resolve);
+    transform.on("error", reject);
+    transform.write(jsonInput);
+    transform.end();
+  });
+
+  const output = JSON.parse(chunks.join(""));
+
+  // MCP-style name should remain unchanged
+  assert.equal(output.output[0].name, "mcp__node_repl__js");
   assert.equal(output.output[0].namespace, undefined);
 });
