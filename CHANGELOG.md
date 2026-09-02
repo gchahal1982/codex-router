@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Pin Gemini 3.8 Flash, Muse Spark 1.3, Claude Fable 5.1, and additional
+  models across providers.** Confirmed routes 2026-09-03: Gemini 3.8 Flash on
+  OpenRouter, Command Code, Nous Research, and Venice; Muse Spark 1.3 and 1.3
+  Contributor on OpenRouter, Nous Research, and opencode Go Responses; Claude
+  Fable 5.1 on OpenRouter, Command Code Messages, Nous Research, and Venice;
+  Command Code Qwen3.8 Max 0902 and GLM-5.3-Flash; opencode Go Messages
+  Qwen3.8 Flash. No new `multiAgentVersion: "v2"` stamps. Updated Command Code
+  curation allowlists for the new Chat and Messages ids.
+
 - **The Windows Control Center no longer flashes PowerShell windows.** A console
   process spawned by a parent that has no console of its own — the Electron
   Control Center and the tray — gets its own window unless `windowsHide` is set,
