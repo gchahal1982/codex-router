@@ -946,6 +946,21 @@ function upstreamHeaders(requestHeaders, body, apiKey, provider, extraHeaders = 
   return headers;
 }
 
+// Kiro's prompt-cache identity is independent from the router's own account
+// affinity. The caller-facing router hashes the harness thread UUID into this
+// conversation id, so forwarding that opaque value gives Prism a stable
+// per-thread cache key without exposing the harness's raw session identifier.
+// Keep this provider-specific: generic upstreams must never receive internal
+// router metadata, and a static fallback would collapse unrelated threads.
+function prismAffinityHeaders(provider, conversationId) {
+  if (canonicalProviderId(provider.id) !== "kiro-prism" || !conversationId) return {};
+  return {
+    "X-Prism-Session": conversationId,
+    "X-Prism-Client": "codex-router",
+    "X-Prism-Job-Type": "coding-agent",
+  };
+}
+
 async function upstreamSession(provider, credential, payload, options = {}, endpoint = provider) {
   if (provider.authProfile !== "github-copilot") {
     return { apiKey: credential.value, baseUrl: providerBaseUrl(endpoint), headers: {} };
@@ -1049,6 +1064,7 @@ async function handleRequest(request, response) {
     ? request.headers["x-codex-router-conversation"].slice(0, 128)
     : "";
   const accountCandidates = selectProviderAccountCandidates(normalized.endpoint, conversationId);
+  const affinityHeaders = prismAffinityHeaders(normalized.provider, conversationId);
   if (!accountCandidates.length) {
     const setup = credentialStatus(normalized.endpoint).setup;
     const credentialType = credentialLabel(normalized.endpoint);
@@ -1144,7 +1160,7 @@ async function handleRequest(request, response) {
           upstreamBody,
           session.apiKey,
           normalized.provider,
-          session.headers,
+          { ...session.headers, ...affinityHeaders },
           normalized.endpoint,
         ),
         body: upstreamBody,
@@ -1169,7 +1185,7 @@ async function handleRequest(request, response) {
             upstreamBody,
             session.apiKey,
             normalized.provider,
-            session.headers,
+            { ...session.headers, ...affinityHeaders },
             normalized.endpoint,
           ),
           body: upstreamBody,

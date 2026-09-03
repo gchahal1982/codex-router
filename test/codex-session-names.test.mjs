@@ -27,6 +27,9 @@ test("resolves a Codex thread header to its user-facing session name", () => {
 });
 
 test("finds nested thread metadata without exposing unrelated metadata", () => {
+  // DeepSeek Harness's pi-ai Responses adapter sends its per-thread UUID in
+  // this header, so it must enter the same affinity path as a Codex thread.
+  assert.equal(threadIdFromHeaders({ session_id: THREAD_ID }), THREAD_ID);
   assert.equal(
     threadIdFromHeaders({
       "x-codex-turn-metadata": JSON.stringify({ turn: { thread_id: THREAD_ID }, prompt: "private" }),

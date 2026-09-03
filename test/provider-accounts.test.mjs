@@ -167,3 +167,85 @@ test("the API forwarder falls back before relay and keeps the conversation on th
     "Bearer sticky-backup-key",
   ]);
 });
+
+test("the API forwarder gives Kiro Prism a stable opaque harness session", async (t) => {
+  const prism = apiProvider("kiro-prism");
+  writeProviderCredential(prism, "prism-test-key");
+  const requests = [];
+  const upstream = http.createServer(async (request, response) => {
+    for await (const _chunk of request) { /* drain */ }
+    requests.push(request.headers);
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }));
+  });
+  await new Promise((resolve, reject) => {
+    upstream.once("error", reject);
+    upstream.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(() => new Promise((resolve) => upstream.close(resolve)));
+  const upstreamAddress = upstream.address();
+  assert.ok(typeof upstreamAddress === "object" && upstreamAddress);
+
+  const port = await openPort();
+  const internalKey = "prism-affinity-test-internal-key";
+  const child = spawn(process.execPath, [path.resolve("src/api-forwarder.mjs")], {
+    cwd: path.resolve("."),
+    env: {
+      ...process.env,
+      CODEX_ROUTER_INTERNAL_KEY: internalKey,
+      CODEX_ROUTER_API_PORT: String(port),
+      KIRO_PRISM_BASE_URL: `http://127.0.0.1:${upstreamAddress.port}/v1`,
+      CODEX_ROUTER_QUIET: "1",
+    },
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let errors = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => { errors += chunk; });
+  t.after(async () => {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => child.once("exit", resolve));
+  });
+
+  const deadline = Date.now() + 15_000;
+  let ready = false;
+  while (Date.now() < deadline) {
+    try {
+      const health = await fetch(`http://127.0.0.1:${port}/health`, {
+        headers: { Authorization: `Bearer ${internalKey}` },
+      });
+      if (health.ok) {
+        ready = true;
+        break;
+      }
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  }
+  assert.equal(child.exitCode, null, errors);
+  assert.equal(ready, true, `Forwarder did not become ready.\n${errors}`);
+
+  const call = () => fetch(`http://127.0.0.1:${port}/v1/responses`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${internalKey}`,
+      "Content-Type": "application/json",
+      "X-Codex-Router-Conversation": "opaque-thread-hash",
+    },
+    body: JSON.stringify({
+      model: "kiro-prism-gpt-5-6-sol",
+      input: "hello",
+    }),
+  });
+
+  const first = await call();
+  assert.equal(first.status, 200, `${await first.text()}\nrequests=${requests.length}\n${errors}`);
+  const second = await call();
+  assert.equal(second.status, 200, `${await second.text()}\n${errors}`);
+  assert.equal(requests.length, 2);
+  for (const headers of requests) {
+    assert.equal(headers["x-prism-session"], "opaque-thread-hash");
+    assert.equal(headers["x-prism-client"], "codex-router");
+    assert.equal(headers["x-prism-job-type"], "coding-agent");
+    assert.equal(headers["x-codex-router-conversation"], undefined);
+  }
+});
