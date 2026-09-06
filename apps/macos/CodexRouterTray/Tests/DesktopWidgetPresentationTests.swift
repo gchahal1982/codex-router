@@ -38,3 +38,50 @@ struct DesktopWidgetPresentationTests {
     )
   }
 }
+
+@Suite("Island account leftover table")
+struct IslandAccountQuotaPresentationTests {
+  @Test("missing leftovers stay as an em dash")
+  func missingPercent() {
+    #expect(IslandAccountQuotaPresentation.percentText(nil) == "—")
+    #expect(IslandAccountQuotaPresentation.percentText(.nan) == "—")
+  }
+
+  @Test("leftovers round to a scannable percent")
+  func roundedPercent() {
+    #expect(IslandAccountQuotaPresentation.percentText(0) == "0%")
+    #expect(IslandAccountQuotaPresentation.percentText(20.6) == "21%")
+    #expect(IslandAccountQuotaPresentation.percentText(59.2) == "59%")
+  }
+
+  @Test("table height covers a header plus every account row")
+  func tableHeight() {
+    #expect(IslandAccountQuotaPresentation.tableHeight(rows: 0) == 34)
+    #expect(IslandAccountQuotaPresentation.tableHeight(rows: 6) == CGFloat(16 + 6 * 18))
+  }
+
+  @Test("5-hour return times stay compact")
+  func fiveHourBackText() {
+    let now = Date(timeIntervalSince1970: 1_770_000_000)
+    #expect(IslandAccountQuotaPresentation.fiveHourBackText(nil, now: now) == "—")
+    #expect(IslandAccountQuotaPresentation.fiveHourBackText(now.timeIntervalSince1970, now: now) == "now")
+    #expect(
+      IslandAccountQuotaPresentation.fiveHourBackText(
+        now.addingTimeInterval(45 * 60).timeIntervalSince1970,
+        now: now
+      ) == "45m"
+    )
+    #expect(
+      IslandAccountQuotaPresentation.fiveHourBackText(
+        now.addingTimeInterval(2 * 3600 + 14 * 60).timeIntervalSince1970,
+        now: now
+      ) == "2h14"
+    )
+    #expect(
+      IslandAccountQuotaPresentation.fiveHourBackText(
+        now.addingTimeInterval(3 * 3600).timeIntervalSince1970,
+        now: now
+      ) == "3h"
+    )
+  }
+}

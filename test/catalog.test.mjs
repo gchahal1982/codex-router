@@ -473,6 +473,41 @@ test("merged catalog gives native models first and keeps routed providers contig
   );
 });
 
+test("Kiro Prism GPT 5.6 routes stay inside Codex Desktop's ten-model provider window", () => {
+  const routed = [
+    { ...grok, slug: "kiro-prism/claude-opus-4.8", provider: "kiro-prism", priority: 99 },
+    { ...grok, slug: "kiro-prism/gpt-5.6-terra", provider: "kiro-prism", priority: 99 },
+    { ...grok, slug: "kiro-prism/auto", provider: "kiro-prism", priority: 99 },
+    { ...grok, slug: "kiro-prism/gpt-5.6-luna", provider: "kiro-prism", priority: 99 },
+    { ...grok, slug: "kiro-prism/claude-opus-5", provider: "kiro-prism", priority: 99 },
+    { ...grok, slug: "kiro-prism/gpt-5.6-sol", provider: "kiro-prism", priority: 99 },
+  ];
+  const merged = buildMergedCatalog({ models: [template] }, routed);
+  assert.deepEqual(merged.slice(1, 5).map((model) => model.slug), [
+    "kiro-prism/auto",
+    "kiro-prism/gpt-5.6-sol",
+    "kiro-prism/gpt-5.6-luna",
+    "kiro-prism/gpt-5.6-terra",
+  ]);
+  assert.deepEqual(
+    merged
+      .filter((model) => model.slug.startsWith("kiro-prism/gpt-5.6-"))
+      .map((model) => model.display_name)
+      .sort()
+      ,
+    [
+      "5.6 Luna · GPT (Kiro Prism)",
+      "5.6 Sol · GPT (Kiro Prism)",
+      "5.6 Terra · GPT (Kiro Prism)",
+    ],
+  );
+  assert.ok(
+    merged
+      .filter((model) => model.slug.startsWith("kiro-prism/gpt-5.6-"))
+      .every((model) => model.display_name.localeCompare("claude-haiku-4.5 (Kiro Prism)") < 0),
+  );
+});
+
 test("native gpt-5.2 stays parseable by older Codex catalog readers", () => {
   const native52 = { ...template, slug: "gpt-5.2" };
   delete native52.supports_parallel_tool_calls;
@@ -1286,8 +1321,8 @@ test(
       );
       assert.equal(visibility.get("deepseek/deepseek-v4-flash"), "list");
       assert.equal(visibility.get("deepseek/deepseek-v4-flash-vision-exp"), "list");
-      assert.equal(visibility.get("deepseek/deepseek-v4-pro"), "hide");
-      assert.equal(visibility.get("gpt-5.6-sol-1m"), "hide");
+      assert.equal(visibility.has("deepseek/deepseek-v4-pro"), false);
+      assert.equal(visibility.has("gpt-5.6-sol-1m"), false);
 
       const picker = JSON.parse(
         readFileSync(path.join(stateDir, "model-picker.json"), "utf8"),

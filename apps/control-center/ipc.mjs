@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { execFile, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import {
   accessSync,
   closeSync,
@@ -608,9 +608,6 @@ export function registerIpcHandlers({
   fetchImpl = globalThis.fetch,
   healthReader = readInstalledControlHealth,
   senderGuard = () => true,
-  platform = process.platform,
-  restartDelayMs = 1_500,
-  execFileImpl = execFile,
 } = {}) {
   if (!ipcMain?.handle) throw new TypeError("ipcMain.handle is required.");
   const operations = new Map();
@@ -635,31 +632,6 @@ export function registerIpcHandlers({
   const whenMutationsIdle = () => pendingMutations === 0
     ? Promise.resolve()
     : new Promise((resolve) => idleWaiters.add(resolve));
-  let codexRestartTimer;
-  const scheduleCodexRestart = () => {
-    if (platform !== "darwin") return;
-    clearTimeout(codexRestartTimer);
-    codexRestartTimer = setTimeout(() => {
-      codexRestartTimer = undefined;
-      const script = [
-        'tell application "System Events"',
-        'set codexRunning to exists application process "Codex"',
-        'end tell',
-        'if codexRunning then',
-        'tell application id "com.openai.codex" to quit',
-        'repeat 100 times',
-        'delay 0.1',
-        'tell application "System Events" to set codexRunning to exists application process "Codex"',
-        'if not codexRunning then exit repeat',
-        'end repeat',
-        'if not codexRunning then tell application id "com.openai.codex" to activate',
-        'end if',
-      ].join("\n");
-      execFileImpl("/usr/bin/osascript", ["-e", script], { timeout: 20_000 }, (error) => {
-        if (error) console.error(`Could not restart Codex after a picker change: ${error.message}`);
-      });
-    }, restartDelayMs);
-  };
   const emit = (payload) => {
     for (const window of BrowserWindow?.getAllWindows?.() || []) {
       if (!window.isDestroyed?.()) window.webContents.send("router-control:operation", payload);
@@ -998,18 +970,14 @@ export function registerIpcHandlers({
   handleAction("setPickerModel", async ({ slug, visible } = {}) => {
     const model = await validateModel(slug);
     if (typeof visible !== "boolean") throw new Error("visible must be boolean.");
-    const result = await runJson(["picker", "set", model, visible ? "show" : "hide"], { timeoutMs: CATALOG_MUTATION_TIMEOUT_MS });
-    scheduleCodexRestart();
-    return result;
+    return runJson(["picker", "set", model, visible ? "show" : "hide"], { timeoutMs: CATALOG_MUTATION_TIMEOUT_MS });
   });
   handleAction("setPickerModels", async (input = {}) => {
     const { models, showAll } = input;
     // The renderer's compact "show all" control uses a boolean; bulk callers
     // may instead provide individual validated model entries.
     if (typeof models === "undefined" && typeof showAll === "boolean") {
-      const result = await runJson(["picker", "all", showAll ? "show" : "hide"], { timeoutMs: CATALOG_MUTATION_TIMEOUT_MS });
-      scheduleCodexRestart();
-      return result;
+      return runJson(["picker", "all", showAll ? "show" : "hide"], { timeoutMs: CATALOG_MUTATION_TIMEOUT_MS });
     }
     if (!Array.isArray(models) || models.length > 500) throw new Error("models must be an array.");
     let result;
@@ -1019,9 +987,7 @@ export function registerIpcHandlers({
       if (typeof visible !== "boolean") throw new Error("Each picker model needs a boolean visible value.");
       result = await runJson(["picker", "set", await validateModel(slug), visible ? "show" : "hide"], { timeoutMs: CATALOG_MUTATION_TIMEOUT_MS });
     }
-    const finalResult = result || (await runJson(["picker", "status"]));
-    scheduleCodexRestart();
-    return finalResult;
+    return result || (await runJson(["picker", "status"]));
   });
 
   handleAction("installLocalModel", async ({ tag, yes = false, force = false } = {}) => {

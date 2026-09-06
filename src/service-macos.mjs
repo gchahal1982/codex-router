@@ -50,6 +50,20 @@ const service = `${domain}/${SERVICE_LABEL}`;
 const launchctl = "/bin/launchctl";
 const launchctlRetryWait = new Int32Array(new SharedArrayBuffer(4));
 const nodeBinary = process.env.CODEX_ROUTER_NODE_BIN || process.execPath;
+const unmanagedRuntimePath = /(?:^|\/)(?:\.nvm|\.volta|\.npm-global)(?:\/|$)|\/Library\/pnpm(?:\/|$)/;
+const inheritedServicePath = process.env.PATH || "";
+const inheritedPathEntries = inheritedServicePath.split(path.delimiter).filter(Boolean);
+const servicePath = process.env.CODEX_ROUTER_SERVICE_PATH
+  || (inheritedPathEntries.some((entry) => unmanagedRuntimePath.test(entry))
+    ? [
+      "/opt/homebrew/bin",
+      "/opt/homebrew/sbin",
+      ...inheritedPathEntries.filter((entry) => !unmanagedRuntimePath.test(entry)),
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+    ].filter((entry, index, entries) => entries.indexOf(entry) === index).join(path.delimiter)
+    : inheritedServicePath || "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin");
 if (!path.isAbsolute(nodeBinary)) {
   throw new Error("CODEX_ROUTER_NODE_BIN must be an absolute path.");
 }
@@ -65,7 +79,7 @@ function xml(value) {
 
 function environmentEntries() {
   const values = {
-    PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
+    PATH: servicePath,
     MODEL_ROUTER_TARGET: TARGET,
     MODEL_ROUTER_STATE_DIR: STATE_DIR,
     MODEL_ROUTER_QUIET: "1",

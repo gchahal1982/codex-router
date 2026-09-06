@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Check, ChevronDown, Filter, KeyRound, Link2, LogIn, MoreHorizontal, Plus, SearchX, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Filter, GripVertical, KeyRound, Link2, LogIn, MoreHorizontal, Plus, SearchX, ShieldCheck, Trash2 } from "lucide-react";
 import { Badge, Button, CatalogSkeleton, Dialog, EmptyState, PageHeader, SearchField, SkeletonBlock, Toggle } from "../components";
 import { BrandLogo, ProviderLogo, brandForModel } from "../provider-branding";
 import { formatContext, formatDateTime } from "../lib";
@@ -18,6 +18,7 @@ import {
 import { groupModelFamilies, preferredFamilyRoute } from "../model-families.mjs";
 import { useOptimisticValues, type RunAction } from "../useOptimisticValues";
 import type {
+  ChatGptAccountUsage,
   ModelViewFocusRequest,
   ProviderCatalog,
   ProviderAccountsSnapshot,
@@ -1776,6 +1777,8 @@ function ProviderAccountsDialog({
   );
 }
 
+const CHATGPT_USAGE_REFRESH_MS = 15_000;
+
 function ChatGptAccountsDialog({
   open,
   snapshot,
@@ -1791,10 +1794,86 @@ function ChatGptAccountsDialog({
 }) {
   const [label, setLabel] = useState("");
   const [preferred, setPreferred] = useState(false);
+  const [usageById, setUsageById] = useState<Record<string, ChatGptAccountUsage>>({});
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageUpdatedAt, setUsageUpdatedAt] = useState<number | null>(null);
+  const [orderIds, setOrderIds] = useState<string[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropId, setDropId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!open) return;
+    const next = (snapshot?.accounts ?? []).map((account) => account.id);
+    setOrderIds((current) => {
+      if (draggingId) return current;
+      if (current.length === next.length && current.every((id, index) => id === next[index])) return current;
+      return next;
+    });
+  }, [draggingId, open, snapshot?.accounts]);
+
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !api?.getChatGptAccountUsage) return;
+    let cancelled = false;
+    let inFlight = false;
+    const load = async (initial = false) => {
+      if (inFlight || cancelled) return;
+      inFlight = true;
+      if (initial) setUsageLoading(true);
+      try {
+        const result = await api.getChatGptAccountUsage();
+        if (cancelled) return;
+        const rows = result.usage?.accounts ?? result.accounts ?? [];
+        const next: Record<string, ChatGptAccountUsage> = {};
+        for (const row of rows) next[row.id] = row;
+        setUsageById(next);
+        setUsageUpdatedAt(Date.now());
+      } catch {
+        if (!cancelled && initial) setUsageById({});
+      } finally {
+        inFlight = false;
+        if (!cancelled && initial) setUsageLoading(false);
+      }
+    };
+    void load(true);
+    const timer = window.setInterval(() => void load(false), CHATGPT_USAGE_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [api, open]);
+
+  const accounts = useMemo(() => {
+    const list = snapshot?.accounts ?? [];
+    const byId = new Map(list.map((account) => [account.id, account]));
+    const ordered = orderIds.map((id) => byId.get(id)).filter((account): account is NonNullable<typeof account> => Boolean(account));
+    for (const account of list) {
+      if (!orderIds.includes(account.id)) ordered.push(account);
+    }
+    return ordered;
+  }, [orderIds, snapshot?.accounts]);
 
   const mutate = (name: string, action: () => Promise<unknown>) => {
     if (!api) return;
     void runAction(name, action);
+  };
+  const moveAccount = (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    const from = orderIds.indexOf(sourceId);
+    const to = orderIds.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    const next = [...orderIds];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setOrderIds(next);
+    if (!api?.setChatGptAccountOrder) return;
+    mutate("Reorder ChatGPT accounts", () => api.setChatGptAccountOrder(next));
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -1807,6 +1886,8 @@ function ChatGptAccountsDialog({
   const close = () => {
     setLabel("");
     setPreferred(false);
+    setDraggingId(null);
+    setDropId(null);
     onClose();
   };
 
@@ -1814,19 +1895,54 @@ function ChatGptAccountsDialog({
     <Dialog
       open={open}
       title="ChatGPT subscription accounts"
-      description="New conversations start on the preferred subscription. Quota, rate-limit, or text-transport failure moves the conversation to another active subscription and keeps it there."
+      description="Drag accounts to sort them. New conversations still start on the preferred subscription; leftover 5-hour and weekly limits refresh every 15 seconds."
       onClose={close}
     >
       <div className="pm-account-list" role="list">
-        {(snapshot?.accounts ?? []).map((account) => (
-          <div className="pm-account-row" role="listitem" key={account.id}>
-            <div>
+        {accounts.map((account) => (
+          <div
+            className={`pm-account-row${draggingId === account.id ? " is-dragging" : ""}${dropId === account.id ? " is-drop-target" : ""}`}
+            role="listitem"
+            key={account.id}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDropId(account.id);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              const sourceId = event.dataTransfer.getData("text/plain") || draggingId;
+              if (sourceId) moveAccount(sourceId, account.id);
+              setDraggingId(null);
+              setDropId(null);
+            }}
+          >
+            <button
+              type="button"
+              className="pm-account-drag"
+              aria-label={`Move ${account.label}`}
+              title="Drag to reorder"
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData("text/plain", account.id);
+                event.dataTransfer.effectAllowed = "move";
+                setDraggingId(account.id);
+              }}
+              onDragEnd={() => {
+                setDraggingId(null);
+                setDropId(null);
+              }}
+            >
+              <GripVertical aria-hidden size={14} strokeWidth={1.7} />
+            </button>
+            <div className="pm-account-main">
               <strong>{account.label}</strong>
               <small>
                 {account.preferred ? "Preferred · " : ""}{account.state}
                 {account.session ? ` · ${account.session}` : ""}
-                {Number.isFinite(account.expiresInHours) ? ` · ${account.expiresInHours}h` : ""}
+                {Number.isFinite(account.expiresInHours) ? ` · session ${account.expiresInHours}h` : ""}
+                {usageById[account.id]?.planType ? ` · ${usageById[account.id].planType}` : ""}
               </small>
+              <AccountQuotaDetails now={now} usage={usageById[account.id]} loading={usageLoading && !usageById[account.id]} />
             </div>
             <div className="pm-account-actions">
               {!account.preferred && account.state === "active" ? (
@@ -1847,6 +1963,11 @@ function ChatGptAccountsDialog({
           </div>
         ))}
       </div>
+      <small className="pm-account-refresh">
+        {usageUpdatedAt
+          ? `Limits updated ${formatDateTime(usageUpdatedAt)} · refresh every 15s`
+          : "Reading leftover 5-hour and weekly limits…"}
+      </small>
       <form className="pm-credential-form pm-account-form" onSubmit={submit}>
         <strong>Add ChatGPT subscription</strong>
         <p><LogIn aria-hidden size={13} strokeWidth={1.7} /> The official Codex browser login opens in an isolated profile. Select a different ChatGPT account; the current Codex login is not replaced or logged out.</p>
@@ -1868,6 +1989,72 @@ function providerConnected(entry: ProviderDirectoryEntry, enabledProviders: Set<
   if (entry.setup?.kind === "anonymous") return enabledProviders.has(entry.id);
   if (entry.setup) return entry.setup.configured;
   return entry.models.some((model) => model.native) || enabledProviders.has(entry.id);
+}
+
+function otherWindowName(window: { windowDurationMins?: number | null }): string {
+  const mins = Number(window.windowDurationMins);
+  if (Number.isFinite(mins) && mins >= 1_440 && mins % 1_440 === 0) return `${mins / 1_440}-day`;
+  if (Number.isFinite(mins) && mins >= 60 && mins % 60 === 0) return `${mins / 60}-hour`;
+  return "Limit";
+}
+
+function quotaResetCountdown(value: number, now = Date.now()): string {
+  const timestamp = value < 10_000_000_000 ? value * 1_000 : value;
+  const remaining = timestamp - now;
+  if (remaining <= 0) return "now";
+  const minutes = Math.ceil(remaining / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function AccountQuotaDetails({
+  usage,
+  loading,
+  now,
+}: {
+  usage?: ChatGptAccountUsage;
+  loading: boolean;
+  now: number;
+}) {
+  if (loading) return <small className="pm-account-quota-note">Reading 5-hour and weekly limits…</small>;
+  if (!usage) return <small className="pm-account-quota-note">5-hour and weekly limits unavailable</small>;
+  const rows = [
+    { name: "5-hour", window: usage.fiveHour },
+    { name: "Weekly", window: usage.weekly },
+    ...(usage.other ?? []).map((window) => ({ name: otherWindowName(window), window })),
+  ];
+  const visible = rows.filter((row) => row.window && Number.isFinite(row.window.remainingPercent));
+  if (!visible.length) {
+    return <small className="pm-account-quota-note">{usage.error || "No 5-hour or weekly window reported"}</small>;
+  }
+  return (
+    <div className="pm-account-quotas" role="table" aria-label="Remaining limits">
+      <div className="pm-account-quota is-head" role="row">
+        <span className="pm-account-quota-window">Window</span>
+        <span className="pm-account-quota-left">Left</span>
+        <span className="pm-account-quota-reset">Resets</span>
+        <span className="pm-account-quota-in">In</span>
+      </div>
+      {visible.map((row) => {
+        const remaining = Math.round(row.window!.remainingPercent);
+        return (
+          <div
+            key={row.name}
+            role="row"
+            className={`pm-account-quota${remaining <= 10 ? " is-critical" : remaining <= 30 ? " is-warning" : ""}`}
+          >
+            <span className="pm-account-quota-window">{row.name}</span>
+            <strong className="pm-account-quota-left">{remaining}%</strong>
+            <span className="pm-account-quota-reset">{Number.isFinite(row.window!.resetsAt) ? formatDateTime(row.window!.resetsAt) : "—"}</span>
+            <span className="pm-account-quota-in">{Number.isFinite(row.window!.resetsAt) ? quotaResetCountdown(row.window!.resetsAt!, now) : "—"}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function providerDisplayName(providerId: string): string {

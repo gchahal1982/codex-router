@@ -74,6 +74,8 @@ export interface RouterControl {
   getProviders(): Promise<unknown>;
   getProviderAccounts(provider: string): Promise<unknown>;
   getChatGptAccounts(): Promise<unknown>;
+  getChatGptAccountUsage(): Promise<unknown>;
+  setChatGptAccountOrder(accountIds: string[]): Promise<unknown>;
   discoverProviderModels(provider: string, options?: { refresh?: boolean }): Promise<unknown>;
   getAccountUsage(): Promise<unknown>;
   getProviderUsage(): Promise<unknown>;

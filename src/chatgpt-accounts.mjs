@@ -21,6 +21,7 @@ import { spawnableCommand } from "./spawnable-command.mjs";
 import { classifyProviderAccountResponse } from "./provider-accounts.mjs";
 import { isRetryableStatus } from "./upstream-retry.mjs";
 import { discoveryDisabled } from "./discovery-mode.mjs";
+import { classifyCodexQuotaWindows, readCodexAccountUsage } from "./codex-account-usage.mjs";
 import {
   CHATGPT_ACCOUNTS_DIR,
   CHATGPT_ACCOUNT_POLICY_PATH,
@@ -108,7 +109,36 @@ function atomicPrivateJson(filePath, value) {
 }
 
 function emptyPolicy() {
-  return { schemaVersion: 1, policy: CHATGPT_ACCOUNT_POLICY, preferred: DEFAULT_CHATGPT_ACCOUNT_ID, accounts: [] };
+  return { schemaVersion: 1, policy: CHATGPT_ACCOUNT_POLICY, preferred: DEFAULT_CHATGPT_ACCOUNT_ID, accounts: [], order: [DEFAULT_CHATGPT_ACCOUNT_ID] };
+}
+
+function isListedAccountId(accountId) {
+  return accountId === DEFAULT_CHATGPT_ACCOUNT_ID || ACCOUNT_ID.test(accountId);
+}
+
+function listedAccountIds(policy) {
+  return [DEFAULT_CHATGPT_ACCOUNT_ID, ...policy.accounts.map((entry) => entry.id)];
+}
+
+function normalizeAccountOrder(policy) {
+  const known = listedAccountIds(policy);
+  const knownSet = new Set(known);
+  const saved = Array.isArray(policy.order) ? policy.order.filter((id) => knownSet.has(id)) : [];
+  const seen = new Set(saved);
+  return [...saved, ...known.filter((id) => !seen.has(id))];
+}
+
+function accountsInOrder(accounts, order) {
+  const remaining = new Map(accounts.map((entry) => [entry.id, entry]));
+  const ordered = [];
+  for (const id of order) {
+    const entry = remaining.get(id);
+    if (!entry) continue;
+    ordered.push(entry);
+    remaining.delete(id);
+  }
+  for (const entry of remaining.values()) ordered.push(entry);
+  return ordered;
 }
 
 function readPolicy({ strict = false } = {}) {
@@ -145,7 +175,16 @@ function readPolicy({ strict = false } = {}) {
     if (parsed.preferred !== DEFAULT_CHATGPT_ACCOUNT_ID && !ids.has(parsed.preferred)) {
       throw new Error("preferred account is missing");
     }
-    return { schemaVersion: 1, policy: CHATGPT_ACCOUNT_POLICY, preferred: parsed.preferred, accounts };
+    const order = Array.isArray(parsed.order)
+      ? parsed.order.filter((id) => typeof id === "string" && isListedAccountId(id))
+      : undefined;
+    return {
+      schemaVersion: 1,
+      policy: CHATGPT_ACCOUNT_POLICY,
+      preferred: parsed.preferred,
+      accounts,
+      ...(order?.length ? { order } : {}),
+    };
   } catch (error) {
     if (strict) throw new Error("ChatGPT account policy is malformed or unsafe.", { cause: error });
     return emptyPolicy();
@@ -259,25 +298,26 @@ export function chatGptAccountsSnapshot() {
   }
   const policy = readPolicy();
   const current = defaultSession();
+  const accounts = [
+    {
+      id: DEFAULT_CHATGPT_ACCOUNT_ID,
+      label: "Current Codex login",
+      plan: null,
+      state: current && !current.expired ? "active" : "missing",
+      preferred: policy.preferred === DEFAULT_CHATGPT_ACCOUNT_ID,
+      source: current ? "Codex-owned active login" : null,
+      session: current ? (current.expired ? "expired" : "usable") : "unavailable",
+      ...(current?.expiresAtMs !== undefined
+        ? { expiresInHours: Math.round(((current.expiresAtMs - Date.now()) / 36e5) * 10) / 10 }
+        : {}),
+    },
+    ...policy.accounts.map((entry) => publicAccount(entry, policy.preferred)),
+  ];
   return {
     providerId: "openai",
     policy: CHATGPT_ACCOUNT_POLICY,
     preferred: policy.preferred,
-    accounts: [
-      {
-        id: DEFAULT_CHATGPT_ACCOUNT_ID,
-        label: "Current Codex login",
-        plan: null,
-        state: current && !current.expired ? "active" : "missing",
-        preferred: policy.preferred === DEFAULT_CHATGPT_ACCOUNT_ID,
-        source: current ? "Codex-owned active login" : null,
-        session: current ? (current.expired ? "expired" : "usable") : "unavailable",
-        ...(current?.expiresAtMs !== undefined
-          ? { expiresInHours: Math.round(((current.expiresAtMs - Date.now()) / 36e5) * 10) / 10 }
-          : {}),
-      },
-      ...policy.accounts.map((entry) => publicAccount(entry, policy.preferred)),
-    ],
+    accounts: accountsInOrder(accounts, normalizeAccountOrder(policy)),
   };
 }
 
@@ -392,6 +432,7 @@ export function addChatGptAccount({ label, preferred = false } = {}) {
       ) throw new Error("That ChatGPT subscription is already in the account pool.");
       policy.accounts.push(entry);
       if (preferred) policy.preferred = accountId;
+      policy.order = [...normalizeAccountOrder(policy).filter((id) => id !== accountId), accountId];
       writePolicy(policy);
       return policy.preferred;
     });
@@ -449,6 +490,32 @@ export function setPreferredChatGptAccount(accountId) {
   });
 }
 
+export function setChatGptAccountOrder(accountIds) {
+  assertDiscoveryEnabled();
+  if (!Array.isArray(accountIds) || !accountIds.length) {
+    throw new Error("ChatGPT account order must list every account.");
+  }
+  return withAtomicStateLock(CHATGPT_ACCOUNT_POLICY_PATH, () => {
+    const policy = readPolicy({ strict: true });
+    const known = listedAccountIds(policy);
+    const unique = [...new Set(accountIds)];
+    if (
+      unique.length !== known.length ||
+      unique.length !== accountIds.length ||
+      unique.some((id) => !known.includes(id))
+    ) {
+      throw new Error("ChatGPT account order must include every account exactly once.");
+    }
+    policy.order = accountIds;
+    policy.accounts = accountIds
+      .filter((id) => id !== DEFAULT_CHATGPT_ACCOUNT_ID)
+      .map((id) => policy.accounts.find((entry) => entry.id === id))
+      .filter(Boolean);
+    writePolicy(policy);
+    return chatGptAccountsSnapshot();
+  });
+}
+
 export function setChatGptAccountState(accountId, state) {
   assertDiscoveryEnabled();
   if (!ACCOUNT_ID.test(accountId) || !["active", "paused"].includes(state)) {
@@ -476,6 +543,7 @@ export function removeChatGptAccount(accountId) {
     policy.accounts = policy.accounts.filter((entry) => entry.id !== accountId);
     if (policy.accounts.length === before) return false;
     if (policy.preferred === accountId) policy.preferred = DEFAULT_CHATGPT_ACCOUNT_ID;
+    policy.order = normalizeAccountOrder(policy).filter((id) => id !== accountId);
     writePolicy(policy);
     const home = accountHome(accountId);
     if (existsSync(home)) {
@@ -605,4 +673,65 @@ export async function classifyChatGptAccountResponse(response) {
   const failure = await classifyProviderAccountResponse(response);
   if (failure.recoverable || !isRetryableStatus(response.status)) return failure;
   return { recoverable: true, reason: "transport", until: Date.now() + TRANSPORT_COOLDOWN_MS };
+}
+
+function usageHomeForAccount(accountId) {
+  return accountId === DEFAULT_CHATGPT_ACCOUNT_ID ? CODEX_HOME : accountHome(accountId);
+}
+
+export async function chatGptAccountsUsage({
+  readUsage = readCodexAccountUsage,
+  timeoutMs = 12_000,
+} = {}) {
+  if (discoveryDisabled()) {
+    throw new Error("ChatGPT account management is unavailable while credential discovery is disabled.");
+  }
+  const snapshot = chatGptAccountsSnapshot();
+  const accounts = [];
+  for (const entry of snapshot.accounts) {
+    if (entry.session !== "usable") {
+      accounts.push({
+        id: entry.id,
+        label: entry.label,
+        state: entry.state,
+        session: entry.session,
+        planType: null,
+        fiveHour: null,
+        weekly: null,
+        error: entry.session === "expired" ? "Session expired." : "Session is not usable.",
+      });
+      continue;
+    }
+    try {
+      const usage = await readUsage({
+        codexHome: usageHomeForAccount(entry.id),
+        timeoutMs,
+      });
+      accounts.push({
+        id: entry.id,
+        label: entry.label,
+        state: entry.state,
+        session: entry.session,
+        planType: usage.planType ?? null,
+        ...classifyCodexQuotaWindows(usage),
+        fetchedAt: usage.fetchedAt,
+      });
+    } catch (error) {
+      accounts.push({
+        id: entry.id,
+        label: entry.label,
+        state: entry.state,
+        session: entry.session,
+        planType: null,
+        fiveHour: null,
+        weekly: null,
+        error: error instanceof Error ? error.message : "Usage unavailable.",
+      });
+    }
+  }
+  return {
+    providerId: "openai",
+    fetchedAt: new Date().toISOString(),
+    accounts,
+  };
 }

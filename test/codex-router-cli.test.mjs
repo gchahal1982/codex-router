@@ -128,6 +128,14 @@ test("the dispatcher forwards arguments verbatim", { skip: posixOnly }, () => {
   }
 });
 
+test("the dispatcher exposes picker state", { skip: posixOnly }, () => {
+  const result = run(["picker", "status"]);
+  assert.equal(result.status, 0, result.stderr);
+  const state = JSON.parse(result.stdout);
+  assert.ok(Array.isArray(state.hidden));
+  assert.ok(Array.isArray(state.visible));
+});
+
 test("every command the usage advertises exists in bin/", { skip: posixOnly }, () => {
   // Usage text is the only place a user learns the command set, so it drifting
   // from bin/ is indistinguishable from the command being broken.

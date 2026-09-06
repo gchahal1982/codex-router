@@ -30,14 +30,21 @@ final class IslandDisplayModel: ObservableObject {
 
   @Published private(set) var state: State = .compact
   @Published private(set) var activeRequestCount = 0
+  @Published private(set) var accountRowCount = 0
 
   var size: CGSize {
     switch state {
     case .compact: return CGSize(width: 320, height: 40)
     case .peek:
-      let activityHeight = min(360, 126 + CGFloat(activeRequestCount) * 40)
-      return CGSize(width: 404, height: activeRequestCount > 0 ? activityHeight : 148)
-    case .expanded: return CGSize(width: 520, height: 372)
+      let quotaHeight = IslandAccountQuotaPresentation.tableHeight(rows: accountRowCount)
+      if activeRequestCount > 0 {
+        return CGSize(
+          width: 404,
+          height: min(390, 118 + CGFloat(activeRequestCount) * 36 + quotaHeight + 52)
+        )
+      }
+      return CGSize(width: 404, height: min(390, 92 + quotaHeight + 52))
+    case .expanded: return CGSize(width: 520, height: 460)
     }
   }
 
@@ -49,11 +56,15 @@ final class IslandDisplayModel: ObservableObject {
   func setActiveRequestCount(_ count: Int) {
     activeRequestCount = max(0, count)
   }
+
+  func setAccountRowCount(_ count: Int) {
+    accountRowCount = max(0, count)
+  }
 }
 
 @MainActor
 final class IslandWindowController {
-  static let windowSize = CGSize(width: 720, height: 400)
+  static let windowSize = CGSize(width: 720, height: 520)
 
   private let window: NSPanel
   private let store: RouterStore
@@ -253,10 +264,16 @@ private struct IslandOverlayView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .foregroundStyle(.white)
-    .onAppear { display.setActiveRequestCount(activeSessions.count) }
+    .onAppear {
+      display.setActiveRequestCount(activeSessions.count)
+      display.setAccountRowCount(store.chatGptAccountUsage?.accounts.count ?? 0)
+    }
     .onChange(of: store.activeRequests.count) { count in
       display.setActiveRequestCount(activeSessions.count)
       if count == 0 { selectedSessionID = nil }
+    }
+    .onChange(of: store.chatGptAccountUsage?.accounts.count) { count in
+      display.setAccountRowCount(count ?? 0)
     }
   }
 
@@ -321,91 +338,8 @@ private struct IslandOverlayView: View {
     .padding(.horizontal, 14)
   }
 
-  @ViewBuilder
   private var peekContent: some View {
-    if store.activeRequests.isEmpty {
-      usagePeekContent
-    } else {
-      activityPeekContent
-    }
-  }
-
-  private var usagePeekContent: some View {
-    VStack(spacing: 9) {
-      HStack(spacing: 9) {
-        LiveOrb(state: store.activityState, count: store.activeChatCount)
-        VStack(alignment: .leading, spacing: 1) {
-          Text(store.activityState.label)
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(store.activityState.tint)
-            .lineLimit(1)
-          Text("\(peekTitle) · \(sourceLabel)")
-            .font(.system(size: 9, weight: .medium, design: .rounded))
-            .foregroundStyle(routerMuted)
-            .lineLimit(1)
-        }
-        Spacer()
-        HStack(spacing: 12) {
-          IslandHeaderMetric(value: todayTokenValue, label: routerLocalized("TODAY TOKENS"))
-          if let accountHeaderValue {
-            IslandHeaderMetric(value: accountHeaderValue, label: accountHeaderLabel)
-          }
-        }
-      }
-      IslandUsageLineChart(points: dailyGraphPoints, tint: graphTint, showsAxis: false)
-        .id("\(store.selectedUsageProviderID)-daily-peek")
-        .frame(height: 43)
-    }
-    .padding(.horizontal, 15)
-    .padding(.top, 10)
-    .padding(.bottom, 8)
-  }
-
-  private var activityPeekContent: some View {
-    VStack(spacing: 8) {
-      HStack(spacing: 9) {
-        LiveOrb(state: store.activityState)
-        VStack(alignment: .leading, spacing: 1) {
-          Text(store.activityState.label)
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(store.activityState.tint)
-          Text(RouterLanguage.isSimplifiedChinese
-            ? "\(activeSessions.count) 个会话运行中"
-            : "\(activeSessions.count) \(activeSessions.count == 1 ? "CHAT" : "CHATS") RUNNING")
-            .font(.system(size: 8, weight: .semibold, design: .monospaced))
-            .foregroundStyle(routerMuted)
-        }
-        Spacer()
-        HStack(spacing: 12) {
-          IslandHeaderMetric(value: todayTokenValue, label: routerLocalized("TODAY TOKENS"))
-          if let accountHeaderValue {
-            IslandHeaderMetric(value: accountHeaderValue, label: accountHeaderLabel)
-          }
-        }
-      }
-      ScrollView(.vertical) {
-        IslandSessionList(sessions: activeSessions, compact: true)
-      }
-      .scrollIndicators(.hidden)
-      .frame(maxHeight: CGFloat(max(1, activeSessions.count)) * 40)
-
-      HStack {
-        Text(routerLocalized("DAILY USAGE"))
-          .font(.system(size: 8, weight: .semibold, design: .monospaced))
-          .foregroundStyle(routerMuted)
-        Spacer()
-        Text(routerLocalized("LAST 7 DAYS"))
-          .font(.system(size: 8, weight: .semibold, design: .monospaced))
-          .foregroundStyle(routerMuted)
-      }
-
-      IslandUsageLineChart(points: dailyGraphPoints, tint: graphTint, showsAxis: false)
-        .id("\(store.selectedUsageProviderID)-daily-active-peek")
-        .frame(height: 43)
-    }
-    .padding(.horizontal, 14)
-    .padding(.top, 10)
-    .padding(.bottom, 10)
+    IslandLiveDashboard(store: store)
   }
 
   private var expandedContent: some View {
@@ -450,6 +384,8 @@ private struct IslandOverlayView: View {
           tint: routerAccent
         )
       }
+
+      IslandAccountQuotaTable(store: store)
 
       HStack(alignment: .firstTextBaseline) {
         Text(routerLocalized("DAILY TOKEN TREND"))
@@ -564,6 +500,9 @@ private struct IslandOverlayView: View {
           )
         }
         .scrollIndicators(.hidden)
+        .frame(maxHeight: 92)
+
+        IslandAccountQuotaTable(store: store)
       }
 
       Spacer(minLength: 0)
@@ -595,17 +534,7 @@ private struct IslandOverlayView: View {
   }
 
   private var activeSessions: [IslandActivitySession] {
-    let grouped = Dictionary(grouping: store.activeRequests) { request in
-      request.sessionId ?? request.sessionName ?? "request-\(request.id)"
-    }
-    return grouped.map { id, requests in
-      let fallback = requests.first.map(store.sessionName(for:)) ?? "Active session"
-      let name = requests.compactMap(\.sessionName).first
-        ?? (grouped.count == 1 ? store.activitySessionName : nil)
-        ?? fallback
-      return IslandActivitySession(id: id, name: name, requests: requests)
-    }
-    .sorted { $0.latestStartedAt > $1.latestStartedAt }
+    islandActivitySessions(store: store)
   }
 
   private var selectedSession: IslandActivitySession? {
@@ -724,6 +653,334 @@ private struct IslandOverlayView: View {
       : routerLocalized("Measured by this router")
   }
 
+}
+
+struct IslandLiveDashboard: View {
+  @ObservedObject var store: RouterStore
+  var showsMenuBarChrome = false
+
+  var body: some View {
+    Group {
+      if store.activeRequests.isEmpty {
+        idleContent
+      } else {
+        activeContent
+      }
+    }
+    .foregroundStyle(.white)
+    .background {
+      if showsMenuBarChrome {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .fill(islandBezel.opacity(0.92))
+          .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+              .stroke(Color.white.opacity(0.08), lineWidth: 0.7)
+          )
+      }
+    }
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(routerLocalized("Usage and live activity"))
+  }
+
+  private var idleContent: some View {
+    VStack(spacing: 9) {
+      HStack(spacing: 9) {
+        LiveOrb(state: store.activityState, count: store.activeChatCount)
+        VStack(alignment: .leading, spacing: 1) {
+          Text(store.activityState.label)
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(store.activityState.tint)
+            .lineLimit(1)
+          Text("\(peekTitle) · \(sourceLabel)")
+            .font(.system(size: 9, weight: .medium, design: .rounded))
+            .foregroundStyle(routerMuted)
+            .lineLimit(1)
+        }
+        Spacer(minLength: 8)
+        metrics
+      }
+      IslandAccountQuotaTable(store: store)
+      IslandUsageLineChart(points: dailyGraphPoints, tint: routerAccent, showsAxis: false)
+        .id("\(store.selectedUsageProviderID)-daily-peek")
+        .frame(height: 36)
+    }
+    .padding(.horizontal, showsMenuBarChrome ? 12 : 15)
+    .padding(.top, showsMenuBarChrome ? 11 : 10)
+    .padding(.bottom, showsMenuBarChrome ? 10 : 8)
+  }
+
+  private var activeContent: some View {
+    VStack(spacing: 8) {
+      HStack(spacing: 9) {
+        LiveOrb(state: store.activityState)
+        VStack(alignment: .leading, spacing: 1) {
+          Text(store.activityState.label)
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(store.activityState.tint)
+          Text(runningLabel)
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .foregroundStyle(routerMuted)
+        }
+        Spacer(minLength: 8)
+        metrics
+      }
+      ScrollView(.vertical) {
+        IslandSessionList(sessions: activeSessions, compact: true)
+      }
+      .scrollIndicators(.hidden)
+      .frame(maxHeight: CGFloat(min(3, max(1, activeSessions.count))) * 40)
+
+      IslandAccountQuotaTable(store: store)
+
+      HStack {
+        Text(routerLocalized("DAILY USAGE"))
+          .font(.system(size: 8, weight: .semibold, design: .monospaced))
+          .foregroundStyle(routerMuted)
+        Spacer()
+        Text(routerLocalized("LAST 7 DAYS"))
+          .font(.system(size: 8, weight: .semibold, design: .monospaced))
+          .foregroundStyle(routerMuted)
+      }
+
+      IslandUsageLineChart(points: dailyGraphPoints, tint: routerAccent, showsAxis: false)
+        .id("\(store.selectedUsageProviderID)-daily-active-peek")
+        .frame(height: 36)
+    }
+    .padding(.horizontal, showsMenuBarChrome ? 12 : 14)
+    .padding(.vertical, showsMenuBarChrome ? 11 : 10)
+  }
+
+  private var metrics: some View {
+    HStack(spacing: 12) {
+      IslandHeaderMetric(value: todayTokenValue, label: routerLocalized("TODAY TOKENS"))
+      if let accountHeaderValue {
+        IslandHeaderMetric(value: accountHeaderValue, label: accountHeaderLabel)
+      }
+    }
+  }
+
+  private var runningLabel: String {
+    if RouterLanguage.isSimplifiedChinese {
+      return "\(activeSessions.count) 个会话运行中"
+    }
+    return "\(activeSessions.count) \(activeSessions.count == 1 ? "CHAT" : "CHATS") RUNNING"
+  }
+
+  private var peekTitle: String {
+    store.activeRequests.first.map(store.sessionName(for:))
+      ?? store.activitySessionName
+      ?? routerLocalized("Router overview")
+  }
+
+  private var sourceLabel: String {
+    let provider = store.selectedUsageProviderID
+    if provider == "openai" { return routerLocalized("CHATGPT • NATIVE") }
+    if provider == "grok-oauth" { return routerLocalized("XAI • OAUTH SESSION") }
+    if provider == "grok-api" { return routerLocalized("XAI • METERED API") }
+    if provider.hasSuffix("-api") || ["deepseek", "chutes", "orca"].contains(provider) {
+      return RouterLanguage.isSimplifiedChinese ? "计量 API" : "METERED API"
+    }
+    return routerLocalized("OAUTH ROUTE")
+  }
+
+  private var todayTokenValue: String {
+    compactTokenCount(store.selectedTodayTokens)
+  }
+
+  private var dailyGraphPoints: [DailyUsagePoint] {
+    store.dailyUsage(days: 7)
+  }
+
+  private var activeSessions: [IslandActivitySession] {
+    islandActivitySessions(store: store)
+  }
+
+  private var weeklyRemainingPercent: Double? {
+    if store.selectedUsageUsesChatGPT {
+      let windows = [store.accountUsage?.primary, store.accountUsage?.secondary].compactMap { $0 }
+      guard let weekly = windows.first(where: { $0.durationLabel == "Weekly limit" }) else {
+        return nil
+      }
+      return Double(max(0, min(100, weekly.remainingPercent)))
+    }
+    guard let weekly = store.selectedProviderUsage?.account.metrics.first(where: {
+      $0.kind == "quota" && standardizedLimitLabel($0.label) == "Weekly limit"
+    }), let remaining = weekly.remainingPercent else {
+      return nil
+    }
+    return max(0, min(100, remaining))
+  }
+
+  private var quotaRemainingPercent: Double? {
+    if store.selectedUsageUsesChatGPT {
+      guard let remaining = store.accountUsage?.primary?.remainingPercent else { return nil }
+      return Double(max(0, min(100, remaining)))
+    }
+    guard let metric = store.selectedAccountMetric else { return nil }
+    return remainingQuotaPercent(metric)
+  }
+
+  private var accountHeaderValue: String? {
+    if let weeklyRemainingPercent { return "\(Int(weeklyRemainingPercent.rounded()))%" }
+    if let quotaRemainingPercent { return "\(Int(quotaRemainingPercent.rounded()))%" }
+    guard let metric = store.selectedAccountMetric, metric.kind == "balance" else { return nil }
+    return formattedAccountMetric(metric)
+  }
+
+  private var accountHeaderLabel: String {
+    if weeklyRemainingPercent != nil { return routerLocalized("WEEKLY LEFT") }
+    if quotaRemainingPercent != nil {
+      let window = accountUsageLabel.replacingOccurrences(
+        of: " limit",
+        with: "",
+        options: [.caseInsensitive]
+      )
+      return "\(window.uppercased()) LEFT"
+    }
+    return accountUsageLabel.uppercased()
+  }
+
+  private var accountUsageLabel: String {
+    if store.selectedUsageUsesChatGPT {
+      return routerLocalized(store.accountUsage?.primary?.durationLabel ?? "ChatGPT limit")
+    }
+    if let metric = store.selectedAccountMetric {
+      return metric.kind == "quota"
+        ? routerLocalized(standardizedLimitLabel(metric.label))
+        : metric.label
+    }
+    return routerLocalized("Usage limit")
+  }
+}
+
+@MainActor
+private func islandActivitySessions(store: RouterStore) -> [IslandActivitySession] {
+  let grouped = Dictionary(grouping: store.activeRequests) { request in
+    request.sessionId ?? request.sessionName ?? "request-\(request.id)"
+  }
+  return grouped.map { id, requests in
+    let fallback = requests.first.map { store.sessionName(for: $0) } ?? "Active session"
+    let name = requests.compactMap(\.sessionName).first
+      ?? (grouped.count == 1 ? store.activitySessionName : nil)
+      ?? fallback
+    return IslandActivitySession(id: id, name: name, requests: requests)
+  }
+  .sorted { $0.latestStartedAt > $1.latestStartedAt }
+}
+
+enum IslandAccountQuotaPresentation {
+  static let rowHeight: CGFloat = 18
+  static let headerHeight: CGFloat = 16
+
+  nonisolated static func percentText(_ remaining: Double?) -> String {
+    guard let remaining, remaining.isFinite else { return "—" }
+    return "\(Int(remaining.rounded()))%"
+  }
+
+  nonisolated static func fiveHourBackText(
+    _ resetsAt: TimeInterval?,
+    now: Date = Date()
+  ) -> String {
+    guard let resetsAt, resetsAt.isFinite else { return "—" }
+    let remaining = Date(timeIntervalSince1970: resetsAt).timeIntervalSince(now)
+    if remaining <= 0 { return "now" }
+    let minutes = max(1, Int((remaining / 60).rounded(.up)))
+    if minutes < 60 { return "\(minutes)m" }
+    let hours = minutes / 60
+    let leftover = minutes % 60
+    if hours < 24 {
+      return leftover == 0 ? "\(hours)h" : "\(hours)h\(leftover)"
+    }
+    return "\(hours / 24)d\(hours % 24)h"
+  }
+
+  nonisolated static func tableHeight(rows: Int) -> CGFloat {
+    guard rows > 0 else { return headerHeight + rowHeight }
+    return headerHeight + CGFloat(rows) * rowHeight
+  }
+}
+
+private struct IslandAccountQuotaTable: View {
+  @ObservedObject var store: RouterStore
+
+  var body: some View {
+    TimelineView(.periodic(from: .now, by: 15)) { timeline in
+      VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 6) {
+          Text(routerLocalized("All usage"))
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .foregroundStyle(routerMuted)
+          Spacer()
+          Text("5h")
+            .frame(width: 32, alignment: .trailing)
+          Text("in")
+            .frame(width: 36, alignment: .trailing)
+          Text("Wk")
+            .frame(width: 32, alignment: .trailing)
+        }
+        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+        .foregroundStyle(routerMuted)
+
+        if let accounts = store.chatGptAccountUsage?.accounts, !accounts.isEmpty {
+          ForEach(accounts) { account in
+            HStack(spacing: 6) {
+              Text(account.label)
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(account.state == "paused" ? routerMuted : .white.opacity(0.92))
+                .lineLimit(1)
+              Spacer(minLength: 6)
+              quotaValue(account.fiveHour?.remainingPercent, width: 32)
+              countdownValue(account.fiveHour, now: timeline.date)
+              quotaValue(account.weekly?.remainingPercent, width: 32)
+            }
+            .frame(height: IslandAccountQuotaPresentation.rowHeight)
+            .accessibilityLabel(accessibilityLabel(for: account, now: timeline.date))
+          }
+        } else {
+          Text(routerLocalized("Loading native Codex usage…"))
+            .font(.system(size: 9, weight: .medium, design: .rounded))
+            .foregroundStyle(routerMuted)
+            .frame(height: IslandAccountQuotaPresentation.rowHeight, alignment: .leading)
+        }
+      }
+    }
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(routerLocalized("All usage"))
+  }
+
+  private func quotaValue(_ remaining: Double?, width: CGFloat) -> some View {
+    let text = IslandAccountQuotaPresentation.percentText(remaining)
+    return Text(text)
+      .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+      .monospacedDigit()
+      .foregroundStyle(quotaTint(remaining))
+      .frame(width: width, alignment: .trailing)
+  }
+
+  private func countdownValue(_ window: ChatGptAccountQuotaWindow?, now: Date) -> some View {
+    let text = IslandAccountQuotaPresentation.fiveHourBackText(window?.resetsAt, now: now)
+    return Text(text)
+      .font(.system(size: 10, weight: .semibold, design: .rounded))
+      .monospacedDigit()
+      .foregroundStyle(text == "—" ? routerMuted : quotaTint(window?.remainingPercent))
+      .frame(width: 36, alignment: .trailing)
+  }
+
+  private func quotaTint(_ remaining: Double?) -> Color {
+    guard let remaining else { return routerMuted }
+    switch DesktopWidgetPresentation.quotaSeverity(remaining) {
+    case .critical: return routerRed
+    case .warning: return routerYellow
+    case .healthy: return .white.opacity(0.92)
+    }
+  }
+
+  private func accessibilityLabel(for account: ChatGptAccountUsageRow, now: Date) -> String {
+    let fiveHour = IslandAccountQuotaPresentation.percentText(account.fiveHour?.remainingPercent)
+    let weekly = IslandAccountQuotaPresentation.percentText(account.weekly?.remainingPercent)
+    let back = IslandAccountQuotaPresentation.fiveHourBackText(account.fiveHour?.resetsAt, now: now)
+    return "\(account.label), 5-hour \(fiveHour), back \(back), weekly \(weekly)"
+  }
 }
 
 private struct IslandHeaderMetric: View {

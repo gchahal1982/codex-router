@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  classifyCodexQuotaWindows,
   normalizeCodexAccountUsage,
   readCodexAccountUsage,
 } from "../src/codex-account-usage.mjs";
@@ -116,6 +117,40 @@ test("the usage panel reaches an npm-installed Codex through cmd.exe", () => {
   assert.ok(invocation.args[3].includes("codex.cmd"), invocation.args[3]);
   assert.equal(invocation.options.windowsVerbatimArguments, true);
   assert.equal(invocation.options.windowsHide, true);
+});
+
+test("an isolated Codex home is passed to the official app-server child", () => {
+  let invocation;
+  readCodexAccountUsage({
+    binary: "/usr/local/bin/codex",
+    platform: "darwin",
+    codexHome: "/tmp/isolated-chatgpt-home",
+    spawnImpl: (command, args, options) => {
+      invocation = { command, args, options };
+      return {
+        stdout: { on() {}, once() {}, removeListener() {}, setEncoding() {} },
+        stdin: { write() {} },
+        once() {},
+        kill() {},
+      };
+    },
+  }).catch(() => {});
+
+  assert.equal(invocation.options.env.CODEX_HOME, "/tmp/isolated-chatgpt-home");
+});
+
+test("classifies Codex primary/secondary windows as 5-hour and weekly", () => {
+  assert.deepEqual(
+    classifyCodexQuotaWindows({
+      primary: { usedPercent: 54, remainingPercent: 46, windowDurationMins: 10_080, resetsAt: 100 },
+      secondary: { usedPercent: 12, remainingPercent: 88, windowDurationMins: 300, resetsAt: 50 },
+    }),
+    {
+      fiveHour: { usedPercent: 12, remainingPercent: 88, windowDurationMins: 300, resetsAt: 50 },
+      weekly: { usedPercent: 54, remainingPercent: 46, windowDurationMins: 10_080, resetsAt: 100 },
+      other: [],
+    },
+  );
 });
 
 test("the usage panel names a missing Codex instead of blaming the app-server", async () => {

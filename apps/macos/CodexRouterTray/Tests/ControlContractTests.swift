@@ -33,6 +33,7 @@ struct ControlContractTests {
   @Test("reads, recovery commands, and mutations have explicit boundaries")
   func classifiesCommandsFailClosed() {
     #expect(RouterControlContractPolicy.access(for: ["--json"]) == .read)
+    #expect(RouterControlContractPolicy.access(for: ["chatgpt-accounts", "usage"]) == .read)
     #expect(RouterControlContractPolicy.access(for: ["providers", "--json"]) == .read)
     #expect(
       RouterControlContractPolicy.access(for: ["local-models", "list", "--json"]) == .read

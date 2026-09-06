@@ -44,6 +44,7 @@ enum RouterControlContractPolicy {
       || arguments == ["local-models", "list", "--json"]
       || arguments == ["vision-bridge", "pull-status"]
       || arguments == ["chatgpt-session", "status"]
+      || arguments == ["chatgpt-accounts", "usage"]
       || arguments == ["health", "--json"]
     {
       return .read
@@ -382,7 +383,7 @@ struct CodexRouterTrayApp: App {
       set: { _ in }
     )) {
       TrayView(store: store)
-        .frame(width: 352, height: 560)
+        .frame(width: 400, height: 600)
     } label: {
       StatusItemLabel(store: store)
     }
@@ -667,6 +668,7 @@ final class RouterStore: ObservableObject {
   @Published private(set) var activitySessionName: String?
   @Published private(set) var accountUsage: CodexAccountUsage?
   @Published private(set) var accountUsageError: String?
+  @Published private(set) var chatGptAccountUsage: ChatGptAccountsUsageSnapshot?
   @Published private(set) var providerUsage: ProviderUsageSnapshot?
   @Published private(set) var providerUsageError: String?
   @Published private(set) var providerSetup: [String: ProviderSetupState] = [:]
@@ -1813,6 +1815,7 @@ final class RouterStore: ObservableObject {
     defer { accountUsagePolling = false }
     while !Task.isCancelled {
       await refreshAccountUsage()
+      await refreshChatGptAccountUsage()
       await refreshProviderUsage()
       do {
         try await Task.sleep(nanoseconds: 30 * 1_000_000_000)
@@ -1834,6 +1837,17 @@ final class RouterStore: ObservableObject {
     }
     accountUsageResolved = true
     resolveInitialUsageProvider()
+  }
+
+  func refreshChatGptAccountUsage() async {
+    do {
+      let output = try await runControl(arguments: ["chatgpt-accounts", "usage"])
+      let next = try JSONDecoder().decode(ChatGptAccountsUsageSnapshot.self, from: output)
+      if chatGptAccountUsage != next { chatGptAccountUsage = next }
+    } catch {
+      // Keep the last readable snapshot so a slow or failed probe does not
+      // blank the dense leftover table.
+    }
   }
 
   func refreshProviderUsage() async {
@@ -3939,6 +3953,29 @@ enum TokenDisplayUnit: String, CaseIterable, Identifiable {
   }
 }
 
+struct ChatGptAccountQuotaWindow: Decodable, Equatable {
+  let remainingPercent: Double
+  let usedPercent: Double?
+  let windowDurationMins: Double?
+  let resetsAt: TimeInterval?
+}
+
+struct ChatGptAccountUsageRow: Decodable, Identifiable, Equatable {
+  let id: String
+  let label: String
+  let state: String
+  let session: String?
+  let planType: String?
+  let fiveHour: ChatGptAccountQuotaWindow?
+  let weekly: ChatGptAccountQuotaWindow?
+  let error: String?
+}
+
+struct ChatGptAccountsUsageSnapshot: Decodable, Equatable {
+  let fetchedAt: String?
+  let accounts: [ChatGptAccountUsageRow]
+}
+
 struct CodexAccountUsage: Decodable, Equatable {
   let fetchedAt: String
   let planType: String?
@@ -5195,27 +5232,8 @@ private struct TrayView: View {
 
 
   private var header: some View {
-    HStack(alignment: .center, spacing: 12) {
-      VStack(alignment: .leading, spacing: 3) {
-        Text(routerLocalized("Codex Router"))
-          .font(.system(size: 15, weight: .semibold))
-        Text(accountLabel)
-          .font(.system(size: 10, weight: .regular))
-          .foregroundStyle(routerMuted)
-      }
-      Spacer()
-      StatusBeacon(state: store.activityState)
-    }
-    .padding(.bottom, 12)
-  }
-
-  private var accountLabel: String {
-    if !store.selectedUsageUsesChatGPT {
-      guard let provider = store.selectedProviderUsage else { return store.selectedUsageProvider.detail }
-      return "\(provider.displayName) · \(provider.credentialType.uppercased())"
-    }
-    guard let plan = store.accountUsage?.planType else { return routerLocalized("Codex account") }
-    return "ChatGPT \(plan.capitalized)"
+    IslandLiveDashboard(store: store, showsMenuBarChrome: true)
+      .padding(.bottom, 12)
   }
 
   private func content(for target: RouterTarget) -> some View {
@@ -6396,7 +6414,7 @@ private struct TrayView: View {
     // model is not the same as downloading it and not the same as deleting it,
     // so the three actions stay visibly separate.
     //
-    // The popover is 352pt wide, so identity stays on one compact line and
+    // The popover is 380pt wide, so identity stays on one compact line and
     // secondary actions live behind an overflow menu. Long tags and role
     // phrases truncate in place instead of making the panel wider or taller.
     @ViewBuilder private var localLlmPanel: some View {
@@ -7720,7 +7738,7 @@ private struct TrayView: View {
       }
       .menuStyle(.borderlessButton)
       // Not fixedSize: that asks for the label's ideal width and ignores the
-      // 352pt popover, so a long engine name pushed the row off the panel
+      // 380pt popover, so a long engine name pushed the row off the panel
       // instead of truncating. A ceiling lets it shrink and keeps the chevron
       // on screen.
       .frame(maxWidth: 230, alignment: .trailing)
@@ -8468,6 +8486,7 @@ private struct TrayView: View {
         Task {
           await store.refresh()
           await store.refreshAccountUsage()
+          await store.refreshChatGptAccountUsage()
           await store.refreshProviderUsage()
           await store.refreshProviderSetup()
         }

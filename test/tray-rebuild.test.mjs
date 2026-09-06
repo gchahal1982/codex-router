@@ -1398,6 +1398,21 @@ test("menu bar provider marks reuse ProviderIcon instead of a second map", () =>
   assert.doesNotMatch(view, /NSImage\(contentsOfFile:/);
 });
 
+test("the menu bar popover opens with the Island live dashboard", () => {
+  const tray = readFileSync(
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),
+    "utf8",
+  );
+  const overlay = readFileSync(
+    path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "IslandOverlay.swift"),
+    "utf8",
+  );
+  assert.match(tray, /IslandLiveDashboard\(store: store, showsMenuBarChrome: true\)/);
+  assert.match(overlay, /struct IslandLiveDashboard: View/);
+  assert.match(overlay, /private var peekContent: some View \{\s*IslandLiveDashboard\(store: store\)/s);
+  assert.match(overlay, /IslandAccountQuotaTable\(store: store\)/);
+});
+
 test("the status item keeps native square geometry in icon-only mode", () => {
   const source = readFileSync(
     path.join(root, "apps", "macos", "CodexRouterTray", "Sources", "CodexRouterTrayApp.swift"),

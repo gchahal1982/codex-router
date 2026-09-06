@@ -88,8 +88,10 @@ different ChatGPT account in the browser. The equivalent CLI commands are:
 
 ```sh
 ./bin/codex-router chatgpt-accounts list
+./bin/codex-router chatgpt-accounts usage
 ./bin/codex-router chatgpt-accounts add --label "Work subscription" --preferred
 ./bin/codex-router chatgpt-accounts prefer default
+./bin/codex-router chatgpt-accounts order default chatgpt_ID
 ./bin/codex-router chatgpt-accounts pause chatgpt_ID
 ./bin/codex-router chatgpt-accounts resume chatgpt_ID
 ./bin/codex-router chatgpt-accounts refresh chatgpt_ID

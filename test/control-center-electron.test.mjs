@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import {
   assertMutationCompatibility,
+  controlEntrypointRuntime,
   detachedControlRuntime,
   discoverSourceRoot,
   runControlDetached,
@@ -518,6 +519,24 @@ test("an operator's own runtime choice is honored exactly as written", async () 
       { platform: "sunos" },
     );
     assert.notEqual(broken.CODEX_ROUTER_NODE_BIN, path.join(directory, "missing"));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("packaged Control Center commands run on the canonical external Node", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "router-control-entrypoint-"));
+  try {
+    const node = path.join(directory, process.platform === "win32" ? "node.exe" : "node");
+    const electron = path.join(directory, process.platform === "win32" ? "Codex Router.exe" : "Codex Router");
+    await writeFile(node, "", { mode: 0o700 });
+    await writeFile(electron, "", { mode: 0o700 });
+    const runtime = controlEntrypointRuntime(
+      { PATH: directory, CODEX_ROUTER_NODE_BIN: node, ELECTRON_RUN_AS_NODE: "1" },
+      { execPath: electron, electron: true },
+    );
+    assert.equal(runtime.executable, node);
+    assert.equal(runtime.environment.ELECTRON_RUN_AS_NODE, undefined);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -1549,6 +1568,15 @@ test("catalog-backed mutations outlive the publication-lock wait", async () => {
   assert.match(source, /handleAction\("setPickerModel"[\s\S]{0,320}CATALOG_MUTATION_TIMEOUT_MS/);
   assert.match(source, /handleAction\("setVisionBridgeEnabled"[\s\S]{0,280}CATALOG_MUTATION_TIMEOUT_MS/);
   assert.match(source, /handleAction\("setSignedRouting"[\s\S]{0,280}CATALOG_MUTATION_TIMEOUT_MS/);
+});
+
+test("picker mutations debounce a macOS Codex restart until publication succeeds", async () => {
+  const source = await readFile(new URL("../apps/control-center/electron/ipc.mjs", import.meta.url), "utf8");
+  assert.match(source, /const scheduleCodexRestart = \(\) =>/);
+  assert.match(source, /clearTimeout\(codexRestartTimer\)/);
+  assert.match(source, /tell application id \\"com\.openai\.codex\\" to quit/);
+  const handler = source.slice(source.indexOf('handleAction("setPickerModel"'), source.indexOf('handleAction("setPickerModels"')));
+  assert.ok(handler.indexOf("await runJson") < handler.indexOf("scheduleCodexRestart()"));
 });
 
 test("service IPC exposes only safe beta actions and start covers readiness", async () => {

@@ -294,31 +294,105 @@
   margin: 0;
 }
 
+.dialog-panel:has(.pm-account-list) {
+  width: min(100%, 760px);
+}
+
 .pm-account-list {
   display: grid;
   gap: 7px;
+  max-height: 68vh;
   margin-bottom: 16px;
+  overflow: auto;
 }
 
 .pm-account-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 10px;
   padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-1);
 }
 
+.pm-account-row.is-dragging { opacity: 0.55; }
+.pm-account-row.is-drop-target { border-color: var(--accent, #3d6d8c); }
+
+.pm-account-drag {
+  margin: 1px 0 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-subtle);
+  cursor: grab;
+}
+.pm-account-drag:active { cursor: grabbing; }
+
+.pm-account-main { min-width: 0; }
+
 .pm-account-row strong,
 .pm-account-row small {
   display: block;
 }
 
-.pm-account-row strong { color: var(--ink-strong); font-size: 11px; }
+.pm-account-row > .pm-account-main > strong { color: var(--ink-strong); font-size: 11px; }
 .pm-account-row small { margin-top: 2px; color: var(--ink-subtle); font-size: 9px; }
-.pm-account-actions { display: flex; gap: 4px; }
+.pm-account-quotas {
+  display: grid;
+  gap: 2px;
+  margin-top: 8px;
+}
+.pm-account-quota,
+.pm-account-quota-note {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.pm-account-quota {
+  display: grid;
+  grid-template-columns: 58px 48px minmax(112px, 1fr) 56px;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 10px;
+}
+.pm-account-quota.is-head {
+  color: var(--ink-subtle);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.pm-account-quota-window { color: var(--ink-subtle); }
+.pm-account-quota-left { font-variant-numeric: tabular-nums; }
+.pm-account-quota-reset { color: var(--ink); }
+.pm-account-quota-in {
+  color: var(--ink-subtle);
+  text-align: right;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+.pm-account-quota strong {
+  display: inline;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.pm-account-quota.is-warning strong { color: var(--warning, #c47d12); }
+.pm-account-quota.is-critical strong { color: var(--danger, #c23b2e); }
+.pm-account-refresh {
+  display: block;
+  margin: -8px 0 12px;
+  color: var(--ink-subtle);
+  font-size: 9px;
+}
+.pm-account-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding-top: 1px;
+}
 .pm-account-form { padding-top: 12px; border-top: 1px solid var(--line); }
 .pm-account-form > strong { color: var(--ink-strong); font-size: 11px; }
 .pm-account-preferred { display: flex; align-items: center; gap: 6px; }

@@ -307,6 +307,32 @@ export interface ProviderAccountEntry {
   expiresInHours?: number;
 }
 
+export interface ChatGptAccountQuotaWindow {
+  usedPercent: number;
+  remainingPercent: number;
+  windowDurationMins?: number | null;
+  resetsAt?: number | null;
+}
+
+export interface ChatGptAccountUsage {
+  id: string;
+  label: string;
+  state: string;
+  session?: string;
+  planType?: string | null;
+  fiveHour?: ChatGptAccountQuotaWindow | null;
+  weekly?: ChatGptAccountQuotaWindow | null;
+  other?: ChatGptAccountQuotaWindow[];
+  fetchedAt?: string;
+  error?: string;
+}
+
+export interface ChatGptAccountsUsageSnapshot {
+  providerId: "openai" | string;
+  fetchedAt?: string;
+  accounts: ChatGptAccountUsage[];
+}
+
 export interface ProviderAccountsSnapshot {
   providerId: string;
   policy: "sticky-fallback" | string;
@@ -642,6 +668,7 @@ export interface RouterControlApi {
   getProviders(): Promise<ProviderSetupSnapshot>;
   getProviderAccounts(provider: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   getChatGptAccounts(): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  getChatGptAccountUsage(): Promise<{ usage?: ChatGptAccountsUsageSnapshot } & ChatGptAccountsUsageSnapshot>;
   discoverProviderModels(provider: string, options?: { refresh?: boolean }): Promise<ProviderCatalog>;
   getAccountUsage(): Promise<AccountUsage>;
   getProviderUsage(): Promise<ProviderUsageSnapshot>;
@@ -665,6 +692,7 @@ export interface RouterControlApi {
   removeProviderAccount(provider: string, accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   addChatGptAccount(label: string, preferred?: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
   setPreferredChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  setChatGptAccountOrder(accountIds: string[]): Promise<{ accounts: ProviderAccountsSnapshot }>;
   setChatGptAccountPaused(accountId: string, paused: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
   removeChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   refreshChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;

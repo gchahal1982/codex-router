@@ -13,6 +13,7 @@ const routerControl = Object.freeze({
   getProviders: () => call("getProviders"),
   getProviderAccounts: (providerId) => call("getProviderAccounts", { providerId }),
   getChatGptAccounts: () => call("getChatGptAccounts"),
+  getChatGptAccountUsage: () => call("getChatGptAccountUsage"),
   discoverProviderModels: (providerId, options) =>
     call("discoverProviderModels", { providerId, refresh: Boolean(options?.refresh) }),
   getAccountUsage: () => call("getAccountUsage"),
@@ -43,6 +44,8 @@ const routerControl = Object.freeze({
     call("addChatGptAccount", { label, preferred }),
   setPreferredChatGptAccount: (accountId) =>
     call("setPreferredChatGptAccount", { accountId }),
+  setChatGptAccountOrder: (accountIds) =>
+    call("setChatGptAccountOrder", { accountIds }),
   setChatGptAccountPaused: (accountId, paused) =>
     call("setChatGptAccountPaused", { accountId, paused }),
   removeChatGptAccount: (accountId) =>

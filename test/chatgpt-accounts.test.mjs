@@ -23,12 +23,14 @@ process.env.MODEL_ROUTER_CHATGPT_ACCOUNT_POLICY = policyPath;
 const {
   addChatGptAccount,
   chatGptAccountsSnapshot,
+  chatGptAccountsUsage,
   classifyChatGptAccountResponse,
   chatGptTransportFailure,
   coolChatGptAccount,
   rememberChatGptAccount,
   reloginChatGptAccount,
   selectChatGptAccountCandidates,
+  setChatGptAccountOrder,
   setChatGptAccountState,
   setPreferredChatGptAccount,
 } = await import("../src/chatgpt-accounts.mjs");
@@ -157,6 +159,18 @@ test("a duplicate official login is rejected without retaining its OAuth profile
   }
 });
 
+test("ChatGPT accounts can be reordered for display and fallback", () => {
+  const ids = chatGptAccountsSnapshot().accounts.map((entry) => entry.id);
+  assert.ok(ids.includes("default"));
+  assert.ok(ids.includes(backupId));
+  const reordered = [ids[ids.length - 1], ...ids.slice(0, -1)];
+  const snapshot = setChatGptAccountOrder(reordered);
+  assert.deepEqual(snapshot.accounts.map((entry) => entry.id), reordered);
+  const saved = JSON.parse(readFileSync(policyPath, "utf8"));
+  assert.deepEqual(saved.order, reordered);
+  setChatGptAccountOrder(ids);
+});
+
 test("preferred ChatGPT selection becomes conversation-sticky and respects cooldown", async () => {
   const caller = {
     authorization: "Bearer default-test-token",
@@ -173,6 +187,26 @@ test("preferred ChatGPT selection becomes conversation-sticky and respects coold
   coolChatGptAccount("default", Date.now());
   await new Promise((resolve) => setTimeout(resolve, 1_050));
   setPreferredChatGptAccount("default");
+});
+
+test("ChatGPT account usage probes each isolated Codex home", async () => {
+  const homes = [];
+  const usage = await chatGptAccountsUsage({
+    readUsage: async ({ codexHome }) => {
+      homes.push(codexHome);
+      return {
+        fetchedAt: "2026-09-06T00:00:00.000Z",
+        planType: "pro",
+        primary: { usedPercent: 90, remainingPercent: 10, windowDurationMins: 10_080, resetsAt: 2 },
+        secondary: { usedPercent: 20, remainingPercent: 80, windowDurationMins: 300, resetsAt: 1 },
+      };
+    },
+  });
+  assert.ok(homes.includes(codexHome));
+  assert.ok(homes.includes(path.join(accountsDir, backupId)));
+  const backup = usage.accounts.find((entry) => entry.id === backupId);
+  assert.equal(backup.weekly.remainingPercent, 10);
+  assert.equal(backup.fiveHour.remainingPercent, 80);
 });
 
 test("paused ChatGPT profiles are not selected", () => {

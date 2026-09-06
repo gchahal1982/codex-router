@@ -10,7 +10,10 @@ an all-provider usage overview, active-provider detail, and provider setup
 shared with the existing command-line control plane.
 
 The tray focuses on Codex and does not disable, uninstall, or change the
-existing router configuration.
+existing router configuration. Clicking the menu-bar icon opens the same live
+card as the Island hover: activity, today's tokens, a leftover table for every
+ChatGPT subscription (5-hour and weekly), the current chat, and the last-seven-days
+graph. Usage, Status, and Settings stay under that card.
 
 ## Desktop widget
 

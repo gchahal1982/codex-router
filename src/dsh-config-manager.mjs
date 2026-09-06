@@ -147,6 +147,7 @@ export function removeRouteFromSettings(contents) {
 //
 const CREDENTIAL_REFS_KEY = "refs";
 const CREDENTIAL_VERSION_KEY = "version";
+const CREDENTIAL_RECORDS_KEY = "records";
 
 /**
  * Decides which of the two shapes a credentials document is written in.
@@ -184,11 +185,11 @@ function credentialPath(document, reference) {
 }
 
 // A multi-line value is legal in both shapes (the harness round-trips those), a
-// nested mapping is not: that is a different document wearing this file's name,
-// and rewriting it would be a guess. The envelope adds one legal level of
-// nesting and not one byte more, so its own entries are held to the same rule —
-// a `refs:` holding `server:\n  host: …` is somebody's configuration file, not
-// a reference map, however much the top of it matches.
+// nested mapping is not unless it is the current harness's `records` store.
+// DSH owns that store and may nest OAuth/grant state below it; the router never
+// reads or writes it. The envelope adds one legal level of nesting for `refs`,
+// whose own entries are still held to the scalar rule — a `refs:` holding
+// `server:\n  host: …` is configuration, not a reference map.
 function assertCredentialDocument(document, refs) {
   const nested = (owner) => {
     throw new Error(
@@ -197,6 +198,7 @@ function assertCredentialDocument(document, refs) {
     );
   };
   for (const node of document.root.children.values()) {
+    if (node.key === CREDENTIAL_RECORDS_KEY) continue;
     if (node === refs) {
       for (const entry of refs.children.values()) {
         if (entry.children.size) nested(`${CREDENTIAL_REFS_KEY}.${entry.key}`);

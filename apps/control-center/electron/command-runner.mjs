@@ -183,6 +183,27 @@ export function detachedControlRuntime(
   return { executable: execPath, environment: childEnvironment };
 }
 
+export function controlEntrypointRuntime(
+  environment = process.env,
+  {
+    platform = process.platform,
+    execPath = process.execPath,
+    electron = Boolean(process.versions.electron),
+  } = {},
+) {
+  const childEnvironment = runtimeEnvironment(environment, {
+    platform,
+    hostExecPath: execPath,
+  });
+  if (!electron) return { executable: execPath, environment: childEnvironment };
+  const executable = discoverExecutable(childEnvironment, "node", platform, execPath);
+  if (!executable) {
+    throw new Error("A canonical external Node runtime is required to run Codex Router commands.");
+  }
+  delete childEnvironment.ELECTRON_RUN_AS_NODE;
+  return { executable, environment: childEnvironment };
+}
+
 function validSourceRoot(candidate) {
   if (!candidate || typeof candidate !== "string") return undefined;
   try {
@@ -487,11 +508,11 @@ function runEntrypoint(entry, args = [], {
     ))
   ) throw new TypeError("Router command environment overrides must be string values.");
   const sourceRoot = discoverSourceRoot();
+  const runtime = controlEntrypointRuntime();
   const childEnvironment = {
-    ...runtimeEnvironment(process.env),
+    ...runtime.environment,
     MODEL_ROUTER_SOURCE_ROOT: sourceRoot,
     MODEL_ROUTER_TARGET: "codex",
-    ...(process.versions.electron ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
     ...environmentOverrides,
   };
   const recordedInstall = recordedInstallManifest();
@@ -518,11 +539,7 @@ function runEntrypoint(entry, args = [], {
     else childEnvironment.CODEX_ROUTER_PACKAGE_MANAGER = recordedInstall.packageManager;
   }
   return new Promise((resolve, reject) => {
-    // A packaged Electron binary can run trusted Node entrypoints without a
-    // separately installed runtime. In CLI/tests process.execPath is already
-    // Node; in the desktop host ELECTRON_RUN_AS_NODE switches that same signed
-    // executable into its Node mode.
-    const child = spawn(process.execPath, [entry, ...args], {
+    const child = spawn(runtime.executable, [entry, ...args], {
       cwd: sourceRoot,
       detached: process.platform !== "win32",
       env: childEnvironment,

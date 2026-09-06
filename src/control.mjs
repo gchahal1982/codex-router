@@ -823,6 +823,11 @@ async function handleChatGptAccounts(command = "list", accountId) {
   } else if (command === "login") {
     if (!accountId) throw new Error("A ChatGPT account id is required.");
     result = { login: accounts.reloginChatGptAccount(accountId) };
+  } else if (command === "order") {
+    result = accounts.setChatGptAccountOrder(args.slice(args.indexOf("order") + 1));
+  } else if (command === "usage") {
+    process.stdout.write(`${JSON.stringify(await accounts.chatGptAccountsUsage())}\n`);
+    return;
   } else if (command !== "list") {
     throw new Error("Unknown ChatGPT account command.");
   }

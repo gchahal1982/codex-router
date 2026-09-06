@@ -561,7 +561,7 @@ export function routedModel(template, model, behaviorTemplate = template) {
     base_instructions: behaviorInstructions,
     model_messages: behaviorModelMessages,
     slug: model.slug,
-    display_name: model.displayName,
+    display_name: pickerDisplayName(model),
     description: model.description,
     priority: model.priority,
     visibility: "list",
@@ -774,6 +774,30 @@ function pickerSlugGroup(slug) {
   return pickerProviderGroup(value.slice(0, value.indexOf("/")));
 }
 
+// Codex Desktop currently renders at most ten entries from a routed provider
+// group. Keep Kiro Prism's primary GPT routes inside that visible window even
+// when the provider exposes a much larger catalog.
+const KIRO_PICKER_ORDER = new Map([
+  ["kiro-prism/auto", 0],
+  ["kiro-prism/gpt-5.6-sol", 1],
+  ["kiro-prism/gpt-5.6-luna", 2],
+  ["kiro-prism/gpt-5.6-terra", 3],
+]);
+
+const KIRO_PICKER_DISPLAY_NAMES = new Map([
+  ["kiro-prism/gpt-5.6-sol", "5.6 Sol · GPT (Kiro Prism)"],
+  ["kiro-prism/gpt-5.6-luna", "5.6 Luna · GPT (Kiro Prism)"],
+  ["kiro-prism/gpt-5.6-terra", "5.6 Terra · GPT (Kiro Prism)"],
+]);
+
+function pickerModelOrder(model) {
+  return KIRO_PICKER_ORDER.get(String(model?.slug || "")) ?? 100;
+}
+
+function pickerDisplayName(model) {
+  return KIRO_PICKER_DISPLAY_NAMES.get(String(model?.slug || "")) ?? model.displayName;
+}
+
 // Orders routed models for the picker by the vendor-group policy WITHOUT
 // rewriting each model's `priority`. The `priority` field feeds Codex's
 // spawn_agent override window (AGENTS.md step 5), where certified native v2
@@ -795,6 +819,7 @@ function routedPickerPriorities(nativeModels, routedModelsList) {
     )
     .flatMap((group) =>
       group.models.sort((left, right) =>
+        pickerModelOrder(left) - pickerModelOrder(right) ||
         Number(left.priority) - Number(right.priority) ||
         String(left.slug).localeCompare(String(right.slug)),
       ),
@@ -807,6 +832,8 @@ function sortCatalogModels(models) {
     const rightGroup = pickerSlugGroup(right.slug);
     const group = leftGroup.rank - rightGroup.rank || leftGroup.key.localeCompare(rightGroup.key);
     if (group) return group;
+    const pickerOrder = pickerModelOrder(left) - pickerModelOrder(right);
+    if (pickerOrder) return pickerOrder;
     const priority = Number(left.priority ?? 999) - Number(right.priority ?? 999);
     return priority || String(left.slug).localeCompare(String(right.slug));
   });
@@ -1070,10 +1097,14 @@ function main() {
         const selected = pickerState.hasExplicitVisibility
           ? visibleModels.has(policySlug)
           : !hidden;
-        return hidden || (routerManaged && !selected)
-          ? { ...model, visibility: "hide" }
-          : model;
-      }),
+        // Some signed-in Codex Desktop builds ignore `visibility: "hide"`
+        // for external catalog entries. Omit unchecked routed models from the
+        // published picker entirely; the gateway still keeps their routes for
+        // active tasks and failover. Login-free mode retains hidden canonical
+        // routes because its native aliases dispatch through those identities.
+        if (!loginFree && routerManaged && !selected) return null;
+        return hidden ? { ...model, visibility: "hide" } : model;
+      }).filter(Boolean),
     });
     if (process.env.MODEL_ROUTER_TEST_FAIL_AFTER_CATALOG_WRITE === "1") {
       throw new Error("Forced failure after model catalog publication.");

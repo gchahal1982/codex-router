@@ -102,11 +102,39 @@ export function normalizeCodexAccountUsage(rateLimitResponse, usageResponse, now
   };
 }
 
+export function classifyCodexQuotaWindows(usage) {
+  const classified = { fiveHour: null, weekly: null, other: [] };
+  for (const window of [usage?.primary, usage?.secondary]) {
+    if (!window || !Number.isFinite(window.usedPercent)) continue;
+    const entry = {
+      usedPercent: window.usedPercent,
+      remainingPercent: window.remainingPercent,
+      windowDurationMins: window.windowDurationMins ?? null,
+      resetsAt: window.resetsAt ?? null,
+    };
+    const kind = quotaWindowKind(window);
+    if (kind === "fiveHour" && !classified.fiveHour) classified.fiveHour = entry;
+    else if (kind === "weekly" && !classified.weekly) classified.weekly = entry;
+    else classified.other.push(entry);
+  }
+  return classified;
+}
+
+function quotaWindowKind(window) {
+  const mins = Number(window?.windowDurationMins);
+  if (!Number.isFinite(mins) || mins <= 0) return null;
+  if (mins === 300 || (mins >= 60 && mins % 60 === 0 && mins / 60 === 5)) return "fiveHour";
+  if (mins === 10_080 || (mins >= 1_440 && mins % 1_440 === 0 && mins / 1_440 === 7)) return "weekly";
+  return null;
+}
+
 export function readCodexAccountUsage({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   binary = codexBinary(),
   platform = process.platform,
   spawnImpl = spawn,
+  env,
+  codexHome,
 } = {}) {
   return new Promise((resolve, reject) => {
     // The app-server answers with the signed-in ChatGPT account's usage, which
@@ -123,8 +151,14 @@ export function readCodexAccountUsage({
       return;
     }
     const target = spawnableCommand(binary, ["app-server"], platform);
+    const childEnv = {
+      ...process.env,
+      ...(env && typeof env === "object" ? env : {}),
+      ...(codexHome ? { CODEX_HOME: codexHome } : {}),
+    };
     const processHandle = spawnImpl(target.command, target.args, {
       ...target.options,
+      env: childEnv,
       stdio: ["pipe", "pipe", "ignore"],
       windowsHide: true,
     });

@@ -184,6 +184,28 @@ test("a reference is set inside the envelope, beside the harness's own", () => {
   assert.equal(removeCredential(after, "CODEX_ROUTER_CALLER_KEY"), before);
 });
 
+test("DSH credential records are preserved while a reference is set and removed", () => {
+  const before =
+    "version: 1\n" +
+    "refs:\n" +
+    "  OTHER_KEY: existing\n" +
+    "records:\n" +
+    "  client-connection/browser-session:\n" +
+    "    type: oauth\n" +
+    "    tokens:\n" +
+    "      access: secret\n";
+  const after = applyCredential(before, "CODEX_ROUTER_CALLER_KEY", "secret-value");
+  assert.ok(after.includes('  CODEX_ROUTER_CALLER_KEY: "secret-value"'));
+  assert.ok(after.includes("records:\n  client-connection/browser-session:\n"));
+  assert.ok(after.includes("    tokens:\n      access: secret\n"));
+  if (YAML_PARSER) {
+    const parsed = parseYaml(after);
+    assert.equal(parsed.records["client-connection/browser-session"].tokens.access, "secret");
+  }
+  assert.equal(applyCredential(after, "CODEX_ROUTER_CALLER_KEY", "secret-value"), after);
+  assert.equal(removeCredential(after, "CODEX_ROUTER_CALLER_KEY"), before);
+});
+
 test("a reference follows the indentation the envelope already uses", () => {
   // Four spaces is the shape that turned a two-space assumption into a
   // document PyYAML rejects outright -- and the file is the harness's whole

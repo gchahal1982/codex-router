@@ -1,9 +1,11 @@
 import {
   addChatGptAccount,
   chatGptAccountsSnapshot,
+  chatGptAccountsUsage,
   refreshChatGptAccount,
   reloginChatGptAccount,
   removeChatGptAccount,
+  setChatGptAccountOrder,
   setChatGptAccountState,
   setPreferredChatGptAccount,
 } from "./chatgpt-accounts.mjs";
@@ -20,13 +22,15 @@ function option(name) {
 function usage() {
   return [
     "Usage: chatgpt-accounts list",
+    "       chatgpt-accounts usage",
     "       chatgpt-accounts add --label NAME [--preferred]",
     "       chatgpt-accounts prefer default|ACCOUNT_ID",
+    "       chatgpt-accounts order ACCOUNT_ID [ACCOUNT_ID...]",
     "       chatgpt-accounts pause|resume|remove|refresh|login ACCOUNT_ID",
   ].join("\n");
 }
 
-if (!["list", "add", "prefer", "pause", "resume", "remove", "refresh", "login"].includes(command)) {
+if (!["list", "usage", "add", "prefer", "order", "pause", "resume", "remove", "refresh", "login"].includes(command)) {
   throw new Error(usage());
 }
 
@@ -48,6 +52,12 @@ if (command === "add") {
 } else if (command === "login") {
   if (!accountId) throw new Error(usage());
   result = { login: reloginChatGptAccount(accountId) };
+} else if (command === "order") {
+  result = setChatGptAccountOrder(args.slice(1));
 }
 
-process.stdout.write(`${JSON.stringify({ ...result, accounts: chatGptAccountsSnapshot() }, null, 2)}\n`);
+if (command === "usage") {
+  process.stdout.write(`${JSON.stringify(await chatGptAccountsUsage(), null, 2)}\n`);
+} else {
+  process.stdout.write(`${JSON.stringify({ ...result, accounts: chatGptAccountsSnapshot() }, null, 2)}\n`);
+}
