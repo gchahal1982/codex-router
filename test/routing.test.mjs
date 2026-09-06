@@ -5733,6 +5733,61 @@ test("router redirects native background turns to the configured routed model", 
   }
 });
 
+test("native picker selections stay native while subagents inherit the routed model", async () => {
+  const nativeRequests = [];
+  const gatewayRequests = [];
+  const native = await mockServer(async (request, response) => {
+    nativeRequests.push(await bodyJson(request));
+    json(response, 200, { route: "native" });
+  });
+  const gateway = await mockServer(async (request, response) => {
+    gatewayRequests.push(await bodyJson(request));
+    json(response, 200, { route: "external" });
+  });
+  const routerPort = await openPort();
+  const testRoot = mkdtempSync(path.join(os.tmpdir(), "codex-router-native-picker-"));
+  const stateDir = path.join(testRoot, "state");
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(
+    path.join(stateDir, "operator-model.json"),
+    `${JSON.stringify({ version: 1, slug: "kimi-oauth/k3", native: false })}\n`,
+  );
+  const router = run("router.mjs", {
+    CODEX_ROUTER_PORT: String(routerPort),
+    CODEX_NATIVE_BASE_URL: `http://127.0.0.1:${native.port}/backend-api/codex`,
+    CODEX_ROUTER_GATEWAY_BASE_URL: `http://127.0.0.1:${gateway.port}/v1`,
+    CODEX_ROUTER_STATE_DIR: stateDir,
+    CODEX_ROUTER_QUIET: "1",
+  });
+
+  const send = (headers = {}) => fetch(`${routerBase(routerPort)}/responses`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer CODEX_CALLER_SECRET",
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify({ model: "gpt-6-astra", input: "route test" }),
+  });
+
+  try {
+    await waitFor(`${routerBase(routerPort)}/models`, router);
+    assert.equal((await send()).status, 200);
+    assert.equal(nativeRequests.length, 1);
+    assert.equal(nativeRequests[0].model, "gpt-6-astra");
+    assert.equal(gatewayRequests.length, 0);
+
+    assert.equal((await send({ "X-OpenAI-Subagent": "1" })).status, 200);
+    assert.equal(nativeRequests.length, 1);
+    assert.equal(gatewayRequests.length, 1);
+    assert.equal(gatewayRequests[0].model, "kimi-oauth-k3");
+  } finally {
+    await stopChild(router);
+    await Promise.all([closeServer(native.server), closeServer(gateway.server)]);
+    rmSync(testRoot, { recursive: true, force: true });
+  }
+});
+
 test("native redirect falls back to native when the target cannot route", async () => {
   const nativeRequests = [];
   const native = await mockServer(async (request, response) => {

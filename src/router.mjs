@@ -3264,11 +3264,16 @@ async function handleResponses(request, response, requestUrl) {
         // Following a remembered model still works if the hint file cannot be written.
       }
     }
-    const followed = followOperatorModel(registeredRoute, {
-      modelsBySlug: MODEL_BY_SLUG,
-      enabledProviders: readProviderSelection(),
-      fallbackSlug: readNativeRedirect(),
-    });
+    // Only delegated/background agents inherit the operator's routed model.
+    // A main-thread native slug came from an explicit picker selection and
+    // must remain on ChatGPT's native Codex path.
+    const followed = request.headers["x-openai-subagent"]
+      ? followOperatorModel(registeredRoute, {
+          modelsBySlug: MODEL_BY_SLUG,
+          enabledProviders: readProviderSelection(),
+          fallbackSlug: readNativeRedirect(),
+        })
+      : registeredRoute;
     if (followed && followed !== registeredRoute) {
       registeredRoute = followed;
     }
