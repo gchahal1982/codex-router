@@ -694,7 +694,7 @@ function EventRow({ event }: { event: UsageEventTelemetry }) {
       />
       <span className="st-event-model">
         <strong>{shortModelName(event.model || "Unknown model")}</strong>
-        <small>{event.provider || "router"}</small>
+        <small>{[event.provider || "router", event.accountLabel].filter(Boolean).join(" · ")}</small>
       </span>
       <span className="st-event-metering">
         <strong>{total === undefined ? "Unmetered" : `${compactNumber(total)} tok`}</strong>

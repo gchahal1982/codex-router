@@ -31,6 +31,8 @@
   <true/>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSUserNotificationsUsageDescription</key>
+  <string>Codex Router notifies you when a ChatGPT subscription is almost empty or a limit resets.</string>
   <key>ModelRouterWidgetAppGroup</key>
   <string>group.io.github.codex-router</string>
   <key>ModelRouterWidgetStorageMode</key>

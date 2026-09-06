@@ -29,8 +29,12 @@ const {
   coolChatGptAccount,
   rememberChatGptAccount,
   reloginChatGptAccount,
+  renameChatGptAccount,
+  chatGptAccountIsDrained,
+  orderChatGptAccountCandidates,
   selectChatGptAccountCandidates,
   setChatGptAccountOrder,
+  setChatGptAccountPurpose,
   setChatGptAccountState,
   setPreferredChatGptAccount,
 } = await import("../src/chatgpt-accounts.mjs");
@@ -169,6 +173,111 @@ test("ChatGPT accounts can be reordered for display and fallback", () => {
   const saved = JSON.parse(readFileSync(policyPath, "utf8"));
   assert.deepEqual(saved.order, reordered);
   setChatGptAccountOrder(ids);
+});
+
+test("ChatGPT account labels can be renamed including the default login", () => {
+  const renamed = renameChatGptAccount("default", "Work Pro");
+  assert.equal(renamed.accounts.find((entry) => entry.id === "default")?.label, "Work Pro");
+  const backup = renameChatGptAccount(backupId, "Backup Pro");
+  assert.equal(backup.accounts.find((entry) => entry.id === backupId)?.label, "Backup Pro");
+  const saved = JSON.parse(readFileSync(policyPath, "utf8"));
+  assert.equal(saved.defaultLabel, "Work Pro");
+  assert.equal(saved.accounts.find((entry) => entry.id === backupId)?.label, "Backup Pro");
+  assert.throws(() => renameChatGptAccount("default", "  "), /must not be empty/i);
+  assert.throws(() => renameChatGptAccount("chatgpt_notfoundaccount1", "Nope"), /not found/i);
+  renameChatGptAccount("default", "Current Codex login");
+  renameChatGptAccount(backupId, "Backup subscription");
+});
+
+test("new ChatGPT conversations skip drained leftovers until a conversation is sticky", () => {
+  assert.equal(chatGptAccountIsDrained({ weekly: { remainingPercent: 0 } }), true);
+  assert.equal(chatGptAccountIsDrained({ fiveHour: { remainingPercent: 0 }, weekly: { remainingPercent: 40 } }), true);
+  assert.equal(chatGptAccountIsDrained({ weekly: { remainingPercent: 12 } }), false);
+  assert.equal(chatGptAccountIsDrained({}), false);
+  const leftoverById = new Map([
+    ["default", { weekly: { remainingPercent: 0 } }],
+    [backupId, { weekly: { remainingPercent: 40 }, fiveHour: { remainingPercent: 80 } }],
+  ]);
+  const ordered = orderChatGptAccountCandidates(
+    [{ id: "default" }, { id: backupId }],
+    {
+      preferred: "default",
+      leftoverById,
+      order: ["default", backupId],
+    },
+  );
+  assert.deepEqual(ordered.map((entry) => entry.id), [backupId, "default"]);
+  const sticky = orderChatGptAccountCandidates(
+    [{ id: "default" }, { id: backupId }],
+    {
+      sticky: "default",
+      preferred: "default",
+      leftoverById,
+      order: ["default", backupId],
+    },
+  );
+  assert.equal(sticky[0].id, "default");
+});
+
+test("ChatGPT account purposes persist and pin leftover-tied fallback", () => {
+  const snapshot = setChatGptAccountPurpose(backupId, "auraone");
+  assert.equal(snapshot.accounts.find((entry) => entry.id === backupId)?.purpose, "auraone");
+  const saved = JSON.parse(readFileSync(policyPath, "utf8"));
+  assert.equal(saved.accounts.find((entry) => entry.id === backupId)?.purpose, "auraone");
+  setChatGptAccountPurpose("default", "personal");
+  const leftoverById = new Map([
+    ["default", { weekly: { remainingPercent: 40 } }],
+    [backupId, { weekly: { remainingPercent: 40 } }],
+  ]);
+  const ordered = orderChatGptAccountCandidates(
+    [{ id: backupId }, { id: "default" }],
+    {
+      leftoverById,
+      purposeById: { default: "personal", [backupId]: "auraone" },
+      pinOrder: ["personal", "auraone", "veerone", "foundation"],
+      order: [backupId, "default"],
+    },
+  );
+  assert.equal(ordered[0].id, "default");
+  setChatGptAccountPurpose(backupId, "reserve");
+});
+
+test("remembered ChatGPT affinities survive a process-local file write", () => {
+  rememberChatGptAccount("conversation-persist", backupId);
+  const affinityPath = path.join(stateDir, "chatgpt-account-affinities.json");
+  const saved = JSON.parse(readFileSync(affinityPath, "utf8"));
+  assert.equal(saved.recent.at(-1).conversationId, "conversation-persist");
+  assert.equal(saved.recent.at(-1).accountId, backupId);
+  assert.doesNotMatch(JSON.stringify(saved), /token|refresh|Bearer/i);
+});
+
+test("a reserve ChatGPT account auto-resumes after a leftover reset", async () => {
+  setChatGptAccountPurpose(backupId, "reserve");
+  setChatGptAccountState(backupId, "paused");
+  writePrivateJson(path.join(stateDir, "chatgpt-account-usage.json"), {
+    fetchedAt: new Date(Date.now() - 60_000).toISOString(),
+    accounts: [
+      { id: "default", weekly: { remainingPercent: 8 } },
+      { id: backupId, weekly: { remainingPercent: 0 } },
+    ],
+  });
+  const usage = await chatGptAccountsUsage({
+    readUsage: async ({ codexHome: home }) => ({
+      fetchedAt: "2026-09-06T00:00:00.000Z",
+      planType: "pro",
+      primary: {
+        usedPercent: home === codexHome ? 92 : 20,
+        remainingPercent: home === codexHome ? 8 : 80,
+        windowDurationMins: 10_080,
+        resetsAt: 2,
+      },
+      secondary: { usedPercent: 10, remainingPercent: 90, windowDurationMins: 300, resetsAt: 1 },
+    }),
+  });
+  assert.equal(usage.accounts.find((entry) => entry.id === backupId)?.state, "active");
+  assert.equal(JSON.parse(readFileSync(policyPath, "utf8")).accounts.find((entry) => entry.id === backupId)?.state, "active");
+  assert.notEqual(usage.routing?.using, "default");
+  assert.equal(usage.skippedPreferred, true);
 });
 
 test("preferred ChatGPT selection becomes conversation-sticky and respects cooldown", async () => {

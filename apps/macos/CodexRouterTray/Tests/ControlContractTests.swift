@@ -34,6 +34,10 @@ struct ControlContractTests {
   func classifiesCommandsFailClosed() {
     #expect(RouterControlContractPolicy.access(for: ["--json"]) == .read)
     #expect(RouterControlContractPolicy.access(for: ["chatgpt-accounts", "usage"]) == .read)
+    #expect(
+      RouterControlContractPolicy.access(for: ["chatgpt-accounts", "prefer", "default"])
+        == .mutation
+    )
     #expect(RouterControlContractPolicy.access(for: ["providers", "--json"]) == .read)
     #expect(
       RouterControlContractPolicy.access(for: ["local-models", "list", "--json"]) == .read

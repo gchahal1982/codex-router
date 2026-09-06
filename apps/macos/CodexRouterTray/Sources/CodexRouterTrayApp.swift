@@ -5,6 +5,7 @@ import Foundation
 import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
+import UserNotifications
 
 // Keep the existing material/background treatment, but use stronger text and
 // semantic accents so the compact tray remains readable over it.
@@ -425,6 +426,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           store?.publishWidgetSnapshot()
         }
       }
+    ChatGptQuotaBanner.requestAuthorization()
     store.retireLoginItem()
     store.startHostAppObservation()
     Task { await store.startPolling() }
@@ -1841,12 +1843,53 @@ final class RouterStore: ObservableObject {
 
   func refreshChatGptAccountUsage() async {
     do {
-      let output = try await runControl(arguments: ["chatgpt-accounts", "usage"])
+      let output = try await runControl(arguments: ["chatgpt-accounts", "usage", "--cached"])
       let next = try JSONDecoder().decode(ChatGptAccountsUsageSnapshot.self, from: output)
+      let alerts = ChatGptQuotaAlert.detect(previous: chatGptAccountUsage, next: next)
       if chatGptAccountUsage != next { chatGptAccountUsage = next }
+      ChatGptQuotaBanner.post(alerts)
     } catch {
       // Keep the last readable snapshot so a slow or failed probe does not
       // blank the dense leftover table.
+    }
+  }
+
+  func preferChatGptAccount(_ accountId: String) async {
+    guard
+      let current = chatGptAccountUsage,
+      let account = current.accounts.first(where: { $0.id == accountId }),
+      account.state != "paused"
+    else { return }
+    if account.preferred == true { return }
+    do {
+      _ = try await runControl(arguments: ["chatgpt-accounts", "prefer", accountId])
+      chatGptAccountUsage = ChatGptAccountsUsageSnapshot(
+        fetchedAt: current.fetchedAt,
+        accounts: current.accounts.map { row in
+          ChatGptAccountUsageRow(
+            id: row.id,
+            label: row.label,
+            state: row.state,
+            session: row.session,
+            planType: row.planType,
+            fiveHour: row.fiveHour,
+            weekly: row.weekly,
+            error: row.error,
+            preferred: row.id == accountId,
+            purpose: row.purpose,
+            health: row.health,
+            using: row.using
+          )
+        },
+        preferred: accountId,
+        using: current.using,
+        skippedPreferred: current.using != nil && current.using != accountId,
+        routing: current.routing,
+        spendToday: current.spendToday,
+        spendByPurpose: current.spendByPurpose
+      )
+    } catch {
+      message = error.localizedDescription
     }
   }
 
@@ -3969,11 +4012,87 @@ struct ChatGptAccountUsageRow: Decodable, Identifiable, Equatable {
   let fiveHour: ChatGptAccountQuotaWindow?
   let weekly: ChatGptAccountQuotaWindow?
   let error: String?
+  let preferred: Bool?
+  let purpose: String?
+  let health: String?
+  let using: Bool?
+
+  init(
+    id: String,
+    label: String,
+    state: String,
+    session: String?,
+    planType: String?,
+    fiveHour: ChatGptAccountQuotaWindow?,
+    weekly: ChatGptAccountQuotaWindow?,
+    error: String?,
+    preferred: Bool?,
+    purpose: String? = nil,
+    health: String? = nil,
+    using: Bool? = nil
+  ) {
+    self.id = id
+    self.label = label
+    self.state = state
+    self.session = session
+    self.planType = planType
+    self.fiveHour = fiveHour
+    self.weekly = weekly
+    self.error = error
+    self.preferred = preferred
+    self.purpose = purpose
+    self.health = health
+    self.using = using
+  }
+}
+
+struct ChatGptRoutingHint: Decodable, Equatable {
+  let preferred: String?
+  let using: String?
+  let skippedPreferred: Bool?
+  let currentChat: String?
 }
 
 struct ChatGptAccountsUsageSnapshot: Decodable, Equatable {
   let fetchedAt: String?
+  let preferred: String?
+  let using: String?
+  let skippedPreferred: Bool?
+  let routing: ChatGptRoutingHint?
+  let spendToday: [String: Double]?
+  let spendByPurpose: [String: Double]?
   let accounts: [ChatGptAccountUsageRow]
+
+  init(
+    fetchedAt: String?,
+    accounts: [ChatGptAccountUsageRow],
+    preferred: String? = nil,
+    using: String? = nil,
+    skippedPreferred: Bool? = nil,
+    routing: ChatGptRoutingHint? = nil,
+    spendToday: [String: Double]? = nil,
+    spendByPurpose: [String: Double]? = nil
+  ) {
+    self.fetchedAt = fetchedAt
+    self.preferred = preferred
+    self.using = using
+    self.skippedPreferred = skippedPreferred
+    self.routing = routing
+    self.spendToday = spendToday
+    self.spendByPurpose = spendByPurpose
+    self.accounts = accounts
+  }
+
+  var usingAccount: ChatGptAccountUsageRow? {
+    let id = using ?? routing?.using
+    if let id { return accounts.first { $0.id == id } }
+    return accounts.first { $0.using == true }
+  }
+
+  func account(id: String?) -> ChatGptAccountUsageRow? {
+    guard let id else { return nil }
+    return accounts.first { $0.id == id }
+  }
 }
 
 struct CodexAccountUsage: Decodable, Equatable {

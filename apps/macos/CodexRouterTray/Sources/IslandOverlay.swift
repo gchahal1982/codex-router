@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 private let islandBezel = Color(red: 0.004, green: 0.005, blue: 0.007)
 
@@ -385,6 +386,8 @@ private struct IslandOverlayView: View {
         )
       }
 
+      IslandRoutingLine(store: store)
+      IslandSpendLine(store: store)
       IslandAccountQuotaTable(store: store)
 
       HStack(alignment: .firstTextBaseline) {
@@ -699,6 +702,8 @@ struct IslandLiveDashboard: View {
         Spacer(minLength: 8)
         metrics
       }
+      IslandRoutingLine(store: store)
+      IslandSpendLine(store: store)
       IslandAccountQuotaTable(store: store)
       IslandUsageLineChart(points: dailyGraphPoints, tint: routerAccent, showsAxis: false)
         .id("\(store.selectedUsageProviderID)-daily-peek")
@@ -730,6 +735,8 @@ struct IslandLiveDashboard: View {
       .scrollIndicators(.hidden)
       .frame(maxHeight: CGFloat(min(3, max(1, activeSessions.count))) * 40)
 
+      IslandRoutingLine(store: store)
+      IslandSpendLine(store: store)
       IslandAccountQuotaTable(store: store)
 
       HStack {
@@ -900,6 +907,196 @@ enum IslandAccountQuotaPresentation {
   }
 }
 
+enum ChatGptQuotaAlertKind: Equatable {
+  case critical(String)
+  case reset(String)
+}
+
+struct ChatGptQuotaAlert: Equatable {
+  let accountId: String
+  let label: String
+  let kind: ChatGptQuotaAlertKind
+
+  var title: String {
+    switch kind {
+    case .critical: return "\(label) is almost empty"
+    case .reset: return "\(label) refreshed"
+    }
+  }
+
+  var body: String {
+    switch kind {
+    case .critical(let window):
+      return "\(window) leftover is at 10% or less."
+    case .reset(let window):
+      return "The \(window) limit has more leftover again."
+    }
+  }
+
+  static let criticalPercent = 10.0
+  static let resetJumpPercent = 25.0
+
+  static func detect(
+    previous: ChatGptAccountsUsageSnapshot?,
+    next: ChatGptAccountsUsageSnapshot
+  ) -> [ChatGptQuotaAlert] {
+    guard let previous else { return [] }
+    let before = Dictionary(uniqueKeysWithValues: previous.accounts.map { ($0.id, $0) })
+    var alerts: [ChatGptQuotaAlert] = []
+    for account in next.accounts {
+      guard let prior = before[account.id] else { continue }
+      alerts.append(
+        contentsOf: windowAlerts(
+          accountId: account.id,
+          label: account.label,
+          window: "5-hour",
+          previous: prior.fiveHour?.remainingPercent,
+          current: account.fiveHour?.remainingPercent
+        )
+      )
+      alerts.append(
+        contentsOf: windowAlerts(
+          accountId: account.id,
+          label: account.label,
+          window: "weekly",
+          previous: prior.weekly?.remainingPercent,
+          current: account.weekly?.remainingPercent
+        )
+      )
+    }
+    return alerts
+  }
+
+  private static func windowAlerts(
+    accountId: String,
+    label: String,
+    window: String,
+    previous: Double?,
+    current: Double?
+  ) -> [ChatGptQuotaAlert] {
+    guard let previous, let current, previous.isFinite, current.isFinite else { return [] }
+    if previous > criticalPercent && current <= criticalPercent {
+      return [ChatGptQuotaAlert(accountId: accountId, label: label, kind: .critical(window))]
+    }
+    if current - previous >= resetJumpPercent {
+      return [ChatGptQuotaAlert(accountId: accountId, label: label, kind: .reset(window))]
+    }
+    return []
+  }
+}
+
+enum ChatGptQuotaBanner {
+  static func requestAuthorization() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+  }
+
+  static func post(_ alerts: [ChatGptQuotaAlert]) {
+    guard !alerts.isEmpty else { return }
+    let center = UNUserNotificationCenter.current()
+    for alert in alerts {
+      let content = UNMutableNotificationContent()
+      content.title = alert.title
+      content.body = alert.body
+      content.sound = .default
+      let kind: String
+      switch alert.kind {
+      case .critical(let window): kind = "critical.\(window)"
+      case .reset(let window): kind = "reset.\(window)"
+      }
+      center.add(
+        UNNotificationRequest(
+          identifier: "chatgpt-quota.\(kind).\(alert.accountId)",
+          content: content,
+          trigger: nil
+        )
+      )
+    }
+  }
+}
+
+private struct IslandRoutingLine: View {
+  @ObservedObject var store: RouterStore
+
+  var body: some View {
+    TimelineView(.periodic(from: .now, by: 1)) { timeline in
+      if let text = routingText(now: timeline.date) {
+        Text(text)
+          .font(.system(size: 9, weight: .medium, design: .rounded))
+          .foregroundStyle(.white.opacity(0.82))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .accessibilityLabel(text)
+      }
+    }
+  }
+
+  private func routingText(now: Date) -> String? {
+    guard let snapshot = store.chatGptAccountUsage else { return nil }
+    let currentId = snapshot.routing?.currentChat
+    let usingId = snapshot.using ?? snapshot.routing?.using
+    let current = snapshot.account(id: currentId) ?? snapshot.usingAccount
+    let using = snapshot.usingAccount ?? snapshot.account(id: usingId)
+    let skipped = snapshot.skippedPreferred == true || snapshot.routing?.skippedPreferred == true
+    let preferred = snapshot.account(id: snapshot.preferred ?? snapshot.routing?.preferred)
+    if store.hasConcurrentActivity, let current {
+      let five = IslandAccountQuotaPresentation.percentText(current.fiveHour?.remainingPercent)
+      let back = IslandAccountQuotaPresentation.fiveHourBackText(current.fiveHour?.resetsAt, now: now)
+      let leftover = five == "—" ? current.label : "\(current.label) · \(five) 5h · \(routerLocalized("in")) \(back)"
+      let prefix = skipped
+        ? "\(routerLocalized("This chat")) · \(leftover) · \(routerLocalized("Preferred skipped"))"
+        : "\(routerLocalized("This chat")) · \(leftover)"
+      return prefix
+    }
+    if let using {
+      if skipped, let preferred, preferred.id != using.id {
+        return "\(routerLocalized("Next chat")) · \(using.label) · \(routerLocalized("Preferred skipped"))"
+      }
+      return "\(routerLocalized("Next chat")) · \(using.label)"
+    }
+    return nil
+  }
+}
+
+private struct IslandSpendLine: View {
+  @ObservedObject var store: RouterStore
+
+  var body: some View {
+    if let text = spendText {
+      Text(text)
+        .font(.system(size: 8.5, weight: .medium, design: .monospaced))
+        .foregroundStyle(routerMuted)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .accessibilityLabel(text)
+    }
+  }
+
+  private var spendText: String? {
+    guard let snapshot = store.chatGptAccountUsage else { return nil }
+    let byPurpose = snapshot.spendByPurpose ?? [:]
+    let parts = byPurpose
+      .filter { $0.value > 0 }
+      .sorted { $0.value > $1.value }
+      .prefix(3)
+      .map { "\(localizedPurpose($0.key)) \(compactTokenCount($0.value))" }
+    let total = (snapshot.spendToday ?? [:]).values.reduce(0, +)
+    if total <= 0 && parts.isEmpty { return nil }
+    let today = routerFormat("Today %@", compactTokenCount(total))
+    return parts.isEmpty ? today : ([today] + parts).joined(separator: " · ")
+  }
+
+  private func localizedPurpose(_ purpose: String) -> String {
+    switch purpose {
+    case "personal": return routerLocalized("personal")
+    case "auraone": return routerLocalized("auraone")
+    case "veerone": return routerLocalized("veerone")
+    case "foundation": return routerLocalized("foundation")
+    case "reserve": return routerLocalized("reserve")
+    default: return purpose
+    }
+  }
+}
+
 private struct IslandAccountQuotaTable: View {
   @ObservedObject var store: RouterStore
 
@@ -923,18 +1120,42 @@ private struct IslandAccountQuotaTable: View {
 
         if let accounts = store.chatGptAccountUsage?.accounts, !accounts.isEmpty {
           ForEach(accounts) { account in
-            HStack(spacing: 6) {
-              Text(account.label)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(account.state == "paused" ? routerMuted : .white.opacity(0.92))
-                .lineLimit(1)
-              Spacer(minLength: 6)
-              quotaValue(account.fiveHour?.remainingPercent, width: 32)
-              countdownValue(account.fiveHour, now: timeline.date)
-              quotaValue(account.weekly?.remainingPercent, width: 32)
+            Button {
+              Task { await store.preferChatGptAccount(account.id) }
+            } label: {
+              HStack(spacing: 6) {
+                if account.preferred == true {
+                  Text("●")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(routerAccent)
+                }
+                Text(account.label)
+                  .font(.system(size: 10, weight: account.preferred == true ? .semibold : .medium, design: .rounded))
+                  .foregroundStyle(account.state == "paused" ? routerMuted : .white.opacity(0.92))
+                  .lineLimit(1)
+                Spacer(minLength: 6)
+                quotaValue(account.fiveHour?.remainingPercent, width: 32)
+                countdownValue(account.fiveHour, now: timeline.date)
+                quotaValue(account.weekly?.remainingPercent, width: 32)
+              }
+              .frame(height: IslandAccountQuotaPresentation.rowHeight)
+              .contentShape(Rectangle())
             }
-            .frame(height: IslandAccountQuotaPresentation.rowHeight)
+            .buttonStyle(.plain)
+            .disabled(account.state == "paused")
+            .help(
+              account.state == "paused"
+                ? routerLocalized("Paused accounts stay out of rotation")
+                : account.preferred == true
+                  ? routerLocalized("Preferred subscription")
+                  : routerLocalized("Click to prefer this subscription")
+            )
             .accessibilityLabel(accessibilityLabel(for: account, now: timeline.date))
+            .accessibilityHint(
+              account.state == "paused" || account.preferred == true
+                ? ""
+                : routerLocalized("Double-click to prefer this subscription")
+            )
           }
         } else {
           Text(routerLocalized("Loading native Codex usage…"))

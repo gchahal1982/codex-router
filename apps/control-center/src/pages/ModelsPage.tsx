@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Check, ChevronDown, Filter, GripVertical, KeyRound, Link2, LogIn, MoreHorizontal, Plus, SearchX, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Filter, GripVertical, KeyRound, Link2, LogIn, MoreHorizontal, Pencil, Plus, SearchX, ShieldCheck, Trash2 } from "lucide-react";
 import { Badge, Button, CatalogSkeleton, Dialog, EmptyState, PageHeader, SearchField, SkeletonBlock, Toggle } from "../components";
 import { BrandLogo, ProviderLogo, brandForModel } from "../provider-branding";
 import { formatContext, formatDateTime } from "../lib";
@@ -19,6 +19,7 @@ import { groupModelFamilies, preferredFamilyRoute } from "../model-families.mjs"
 import { useOptimisticValues, type RunAction } from "../useOptimisticValues";
 import type {
   ChatGptAccountUsage,
+  ChatGptRoutingHint,
   ModelViewFocusRequest,
   ProviderCatalog,
   ProviderAccountsSnapshot,
@@ -1778,6 +1779,7 @@ function ProviderAccountsDialog({
 }
 
 const CHATGPT_USAGE_REFRESH_MS = 15_000;
+const CHATGPT_PURPOSES = ["personal", "auraone", "veerone", "foundation", "reserve"] as const;
 
 function ChatGptAccountsDialog({
   open,
@@ -1797,9 +1799,12 @@ function ChatGptAccountsDialog({
   const [usageById, setUsageById] = useState<Record<string, ChatGptAccountUsage>>({});
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageUpdatedAt, setUsageUpdatedAt] = useState<number | null>(null);
+  const [routing, setRouting] = useState<ChatGptRoutingHint | null>(null);
   const [orderIds, setOrderIds] = useState<string[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftLabel, setDraftLabel] = useState("");
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -1833,6 +1838,7 @@ function ChatGptAccountsDialog({
         const next: Record<string, ChatGptAccountUsage> = {};
         for (const row of rows) next[row.id] = row;
         setUsageById(next);
+        setRouting(result.usage?.routing ?? result.routing ?? null);
         setUsageUpdatedAt(Date.now());
       } catch {
         if (!cancelled && initial) setUsageById({});
@@ -1875,6 +1881,26 @@ function ChatGptAccountsDialog({
     if (!api?.setChatGptAccountOrder) return;
     mutate("Reorder ChatGPT accounts", () => api.setChatGptAccountOrder(next));
   };
+  const startRename = (account: { id: string; label: string }) => {
+    setEditingId(account.id);
+    setDraftLabel(account.label);
+  };
+  const cancelRename = () => {
+    setEditingId(null);
+    setDraftLabel("");
+  };
+  const commitRename = (account: { id: string; label: string }) => {
+    const next = draftLabel.trim();
+    setEditingId(null);
+    setDraftLabel("");
+    if (!api?.renameChatGptAccount || !next || next === account.label) return;
+    setUsageById((current) => {
+      const row = current[account.id];
+      if (!row) return current;
+      return { ...current, [account.id]: { ...row, label: next } };
+    });
+    mutate(`Rename ${account.label}`, () => api.renameChatGptAccount(account.id, next));
+  };
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!api || !label.trim()) return;
@@ -1888,6 +1914,7 @@ function ChatGptAccountsDialog({
     setPreferred(false);
     setDraggingId(null);
     setDropId(null);
+    cancelRename();
     onClose();
   };
 
@@ -1895,9 +1922,16 @@ function ChatGptAccountsDialog({
     <Dialog
       open={open}
       title="ChatGPT subscription accounts"
-      description="Drag accounts to sort them. New conversations still start on the preferred subscription; leftover 5-hour and weekly limits refresh every 15 seconds."
+      description="Click a name to rename it, or drag the grip to sort. New chats follow leftover health and purpose pins; preferred stays your home unless it is soft-drained."
       onClose={close}
     >
+      {routing?.skippedPreferred || routing?.using ? (
+        <small className="pm-account-routing">
+          {routing.skippedPreferred
+            ? `Preferred skipped · using ${accounts.find((account) => account.id === routing.using)?.label || routing.using || "next healthy account"}`
+            : `Using ${accounts.find((account) => account.id === routing.using)?.label || routing.using}`}
+        </small>
+      ) : null}
       <div className="pm-account-list" role="list">
         {accounts.map((account) => (
           <div
@@ -1935,30 +1969,85 @@ function ChatGptAccountsDialog({
               <GripVertical aria-hidden size={14} strokeWidth={1.7} />
             </button>
             <div className="pm-account-main">
-              <strong>{account.label}</strong>
+              <div className="pm-account-head">
+                {editingId === account.id ? (
+                  <input
+                    className="pm-account-rename-input"
+                    value={draftLabel}
+                    autoFocus
+                    maxLength={160}
+                    aria-label={`Rename ${account.label}`}
+                    onChange={(event) => setDraftLabel(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        commitRename(account);
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelRename();
+                      }
+                    }}
+                    onBlur={() => commitRename(account)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="pm-account-name"
+                    disabled={!api}
+                    title="Click to rename"
+                    onClick={() => startRename(account)}
+                  >
+                    {account.label}
+                  </button>
+                )}
+                <div className="pm-account-actions">
+                  <select
+                    className="pm-account-purpose"
+                    aria-label={`Purpose for ${account.label}`}
+                    value={account.purpose || usageById[account.id]?.purpose || "personal"}
+                    disabled={!api?.setChatGptAccountPurpose}
+                    onChange={(event) => {
+                      const purpose = event.target.value;
+                      mutate(`Set ${account.label} purpose`, () => api!.setChatGptAccountPurpose(account.id, purpose));
+                    }}
+                  >
+                    {CHATGPT_PURPOSES.map((purpose) => (
+                      <option key={purpose} value={purpose}>{purpose}</option>
+                    ))}
+                  </select>
+                  {editingId === account.id ? null : (
+                    <Button variant="ghost" disabled={!api} onClick={() => startRename(account)}>
+                      <Pencil aria-hidden size={11} strokeWidth={1.7} /> Rename
+                    </Button>
+                  )}
+                  {!account.preferred && account.state === "active" ? (
+                    <Button variant="ghost" disabled={!api} onClick={() => mutate("Prefer ChatGPT account", () => api!.setPreferredChatGptAccount(account.id))}>Prefer</Button>
+                  ) : null}
+                  {account.id !== "default" ? (
+                    <>
+                      {account.session !== "usable" ? (
+                        <Button variant="ghost" disabled={!api} onClick={() => mutate("Sign in to ChatGPT account", () => api!.loginChatGptAccount(account.id))}>Sign in again</Button>
+                      ) : null}
+                      <Button variant="ghost" disabled={!api} onClick={() => mutate(account.state === "paused" ? "Resume ChatGPT account" : "Pause ChatGPT account", () => api!.setChatGptAccountPaused(account.id, account.state !== "paused"))}>
+                        {account.state === "paused" ? "Resume" : "Pause"}
+                      </Button>
+                      <Button variant="ghost" disabled={!api} onClick={() => mutate("Remove ChatGPT account", () => api!.removeChatGptAccount(account.id))}>Remove</Button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
               <small>
-                {account.preferred ? "Preferred · " : ""}{account.state}
+                {account.preferred ? "Preferred · " : ""}
+                {usageById[account.id]?.using ? "using · " : ""}
+                {routing?.skippedPreferred && account.preferred ? "skipped · " : ""}
+                {account.purpose || usageById[account.id]?.purpose ? `${account.purpose || usageById[account.id]?.purpose} · ` : ""}
+                {account.state}
                 {account.session ? ` · ${account.session}` : ""}
                 {Number.isFinite(account.expiresInHours) ? ` · session ${account.expiresInHours}h` : ""}
                 {usageById[account.id]?.planType ? ` · ${usageById[account.id].planType}` : ""}
               </small>
               <AccountQuotaDetails now={now} usage={usageById[account.id]} loading={usageLoading && !usageById[account.id]} />
-            </div>
-            <div className="pm-account-actions">
-              {!account.preferred && account.state === "active" ? (
-                <Button variant="ghost" disabled={!api} onClick={() => mutate("Prefer ChatGPT account", () => api!.setPreferredChatGptAccount(account.id))}>Prefer</Button>
-              ) : null}
-              {account.id !== "default" ? (
-                <>
-                  {account.session !== "usable" ? (
-                    <Button variant="ghost" disabled={!api} onClick={() => mutate("Sign in to ChatGPT account", () => api!.loginChatGptAccount(account.id))}>Sign in again</Button>
-                  ) : null}
-                  <Button variant="ghost" disabled={!api} onClick={() => mutate(account.state === "paused" ? "Resume ChatGPT account" : "Pause ChatGPT account", () => api!.setChatGptAccountPaused(account.id, account.state !== "paused"))}>
-                    {account.state === "paused" ? "Resume" : "Pause"}
-                  </Button>
-                  <Button variant="ghost" disabled={!api} onClick={() => mutate("Remove ChatGPT account", () => api!.removeChatGptAccount(account.id))}>Remove</Button>
-                </>
-              ) : null}
             </div>
           </div>
         ))}

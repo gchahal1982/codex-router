@@ -24,12 +24,31 @@ import { discoveryDisabled } from "./discovery-mode.mjs";
 import { classifyCodexQuotaWindows, readCodexAccountUsage } from "./codex-account-usage.mjs";
 import {
   CHATGPT_ACCOUNTS_DIR,
+  CHATGPT_ACCOUNT_AFFINITY_PATH,
   CHATGPT_ACCOUNT_POLICY_PATH,
+  CHATGPT_ACCOUNT_USAGE_CACHE_PATH,
   CODEX_HOME,
   STATE_DIR,
 } from "./paths.mjs";
+import {
+  CHATGPT_ACCOUNT_PURPOSES,
+  DRAINED_LEFTOVER_PERCENT as PLANE_DRAINED,
+  LEFTOVER_CACHE_MAX_AGE_MS as PLANE_CACHE_MAX_AGE,
+  LEFTOVER_PROBE_MS,
+  SOFT_DRAIN_PERCENT,
+  chatGptAccountIsDrained as planeIsDrained,
+  chatGptAccountSpendToday,
+  inferPurpose,
+  leftoverHealth,
+  normalizePurpose,
+  normalizeRules,
+  orderChatGptAccountCandidates as planeOrder,
+  pickChatGptAccount,
+  reserveResumeDecisions,
+} from "./chatgpt-account-plane.mjs";
 
 export const DEFAULT_CHATGPT_ACCOUNT_ID = "default";
+export const DEFAULT_CHATGPT_ACCOUNT_LABEL = "Current Codex login";
 export const CHATGPT_ACCOUNT_POLICY = "sticky-fallback";
 
 const ACCOUNT_ID = /^chatgpt_[A-Za-z0-9_-]{16,64}$/;
@@ -37,6 +56,9 @@ const MAX_LABEL = 160;
 const MAX_ACCOUNTS = 20;
 const MAX_AUTH_FILE_BYTES = 1024 * 1024;
 const AFFINITY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const DRAINED_LEFTOVER_PERCENT = PLANE_DRAINED;
+export const LEFTOVER_CACHE_MAX_AGE_MS = PLANE_CACHE_MAX_AGE;
+export { CHATGPT_ACCOUNT_PURPOSES, SOFT_DRAIN_PERCENT };
 const MAX_AFFINITIES = 5_000;
 const TRANSPORT_COOLDOWN_MS = 30_000;
 const EXPIRY_SKEW_MS = 120_000;
@@ -109,7 +131,27 @@ function atomicPrivateJson(filePath, value) {
 }
 
 function emptyPolicy() {
-  return { schemaVersion: 1, policy: CHATGPT_ACCOUNT_POLICY, preferred: DEFAULT_CHATGPT_ACCOUNT_ID, accounts: [], order: [DEFAULT_CHATGPT_ACCOUNT_ID] };
+  return {
+    schemaVersion: 1,
+    policy: CHATGPT_ACCOUNT_POLICY,
+    preferred: DEFAULT_CHATGPT_ACCOUNT_ID,
+    accounts: [],
+    order: [DEFAULT_CHATGPT_ACCOUNT_ID],
+    rules: normalizeRules(),
+  };
+}
+
+function optionalDefaultLabel(value) {
+  if (typeof value !== "string") return undefined;
+  try {
+    return cleanLabel(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function defaultAccountLabel(policy) {
+  return optionalDefaultLabel(policy?.defaultLabel) || DEFAULT_CHATGPT_ACCOUNT_LABEL;
 }
 
 function isListedAccountId(accountId) {
@@ -168,6 +210,7 @@ function readPolicy({ strict = false } = {}) {
         label: entry.label.trim(),
         state: entry.state,
         accountFingerprint: entry.accountFingerprint,
+        purpose: normalizePurpose(entry.purpose) || inferPurpose(entry.label, { id: entry.id, state: entry.state }),
         createdAt: typeof entry.createdAt === "string" ? entry.createdAt : undefined,
         updatedAt: typeof entry.updatedAt === "string" ? entry.updatedAt : undefined,
       };
@@ -178,12 +221,18 @@ function readPolicy({ strict = false } = {}) {
     const order = Array.isArray(parsed.order)
       ? parsed.order.filter((id) => typeof id === "string" && isListedAccountId(id))
       : undefined;
+    const defaultLabel = optionalDefaultLabel(parsed.defaultLabel);
+    const defaultPurpose = normalizePurpose(parsed.defaultPurpose)
+      || inferPurpose(defaultLabel || DEFAULT_CHATGPT_ACCOUNT_LABEL, { id: DEFAULT_CHATGPT_ACCOUNT_ID });
     return {
       schemaVersion: 1,
       policy: CHATGPT_ACCOUNT_POLICY,
       preferred: parsed.preferred,
       accounts,
+      rules: normalizeRules(parsed.rules),
+      defaultPurpose,
       ...(order?.length ? { order } : {}),
+      ...(defaultLabel ? { defaultLabel } : {}),
     };
   } catch (error) {
     if (strict) throw new Error("ChatGPT account policy is malformed or unsafe.", { cause: error });
@@ -263,6 +312,33 @@ export function chatGptAccountAuthPaths({ includeDefault = true } = {}) {
   ];
 }
 
+function accountPurpose(entry) {
+  return normalizePurpose(entry.purpose) || inferPurpose(entry.label, { id: entry.id, state: entry.state });
+}
+
+function defaultPurpose(policy) {
+  return normalizePurpose(policy?.defaultPurpose)
+    || inferPurpose(defaultAccountLabel(policy), { id: DEFAULT_CHATGPT_ACCOUNT_ID });
+}
+
+function purposeByIdFromPolicy(policy) {
+  const purposes = new Map([[DEFAULT_CHATGPT_ACCOUNT_ID, defaultPurpose(policy)]]);
+  for (const entry of policy.accounts) purposes.set(entry.id, accountPurpose(entry));
+  return purposes;
+}
+
+function selectionOptions(policy, leftoverById) {
+  const rules = normalizeRules(policy.rules);
+  return {
+    preferred: policy.preferred,
+    leftoverById,
+    order: normalizeAccountOrder(policy),
+    purposeById: purposeByIdFromPolicy(policy),
+    pinOrder: rules.pinOrder,
+    softDrainPercent: rules.softDrainPercent,
+  };
+}
+
 function publicAccount(entry, preferred) {
   const session = profileSession(entry.id);
   return {
@@ -270,6 +346,7 @@ function publicAccount(entry, preferred) {
     label: entry.label,
     plan: null,
     state: entry.state,
+    purpose: accountPurpose(entry),
     preferred: preferred === entry.id,
     source: "isolated official Codex login",
     session: session ? (session.expired ? "expired" : "usable") : "unavailable",
@@ -287,7 +364,7 @@ export function chatGptAccountsSnapshot() {
       preferred: DEFAULT_CHATGPT_ACCOUNT_ID,
       accounts: [{
         id: DEFAULT_CHATGPT_ACCOUNT_ID,
-        label: "Current Codex login",
+        label: DEFAULT_CHATGPT_ACCOUNT_LABEL,
         plan: null,
         state: "missing",
         preferred: true,
@@ -301,9 +378,10 @@ export function chatGptAccountsSnapshot() {
   const accounts = [
     {
       id: DEFAULT_CHATGPT_ACCOUNT_ID,
-      label: "Current Codex login",
+      label: defaultAccountLabel(policy),
       plan: null,
       state: current && !current.expired ? "active" : "missing",
+      purpose: defaultPurpose(policy),
       preferred: policy.preferred === DEFAULT_CHATGPT_ACCOUNT_ID,
       source: current ? "Codex-owned active login" : null,
       session: current ? (current.expired ? "expired" : "usable") : "unavailable",
@@ -416,6 +494,7 @@ export function addChatGptAccount({ label, preferred = false } = {}) {
       id: accountId,
       label,
       state: "active",
+      purpose: inferPurpose(label, { id: accountId, state: "active" }),
       accountFingerprint: session.accountFingerprint,
       createdAt: now,
       updatedAt: now,
@@ -487,6 +566,73 @@ export function setPreferredChatGptAccount(accountId) {
     policy.preferred = accountId;
     writePolicy(policy);
     return chatGptAccountsSnapshot();
+  });
+}
+
+export function renameChatGptAccount(accountId, label) {
+  assertDiscoveryEnabled();
+  const nextLabel = cleanLabel(label);
+  if (!isListedAccountId(accountId)) throw new Error("Invalid ChatGPT account id.");
+  return withAtomicStateLock(CHATGPT_ACCOUNT_POLICY_PATH, () => {
+    const policy = readPolicy({ strict: true });
+    if (accountId === DEFAULT_CHATGPT_ACCOUNT_ID) {
+      policy.defaultLabel = nextLabel;
+    } else {
+      const entry = policy.accounts.find((candidate) => candidate.id === accountId);
+      if (!entry) throw new Error("ChatGPT account was not found.");
+      entry.label = nextLabel;
+      entry.updatedAt = new Date().toISOString();
+    }
+    writePolicy(policy);
+    return chatGptAccountsSnapshot();
+  });
+}
+
+export function setChatGptAccountPurpose(accountId, purpose) {
+  assertDiscoveryEnabled();
+  if (!isListedAccountId(accountId)) throw new Error("Invalid ChatGPT account id.");
+  const next = normalizePurpose(purpose);
+  if (!next) throw new Error(`ChatGPT account purpose must be one of: ${CHATGPT_ACCOUNT_PURPOSES.join(", ")}.`);
+  return withAtomicStateLock(CHATGPT_ACCOUNT_POLICY_PATH, () => {
+    const policy = readPolicy({ strict: true });
+    if (accountId === DEFAULT_CHATGPT_ACCOUNT_ID) {
+      policy.defaultPurpose = next;
+    } else {
+      const entry = policy.accounts.find((candidate) => candidate.id === accountId);
+      if (!entry) throw new Error("ChatGPT account was not found.");
+      entry.purpose = next;
+      entry.updatedAt = new Date().toISOString();
+    }
+    policy.rules = normalizeRules(policy.rules);
+    writePolicy(policy);
+    return chatGptAccountsSnapshot();
+  });
+}
+
+export function seedChatGptAccountPurposes() {
+  assertDiscoveryEnabled();
+  return withAtomicStateLock(CHATGPT_ACCOUNT_POLICY_PATH, () => {
+    const policy = readPolicy({ strict: true });
+    let changed = false;
+    if (!normalizePurpose(policy.defaultPurpose)) {
+      policy.defaultPurpose = defaultPurpose(policy);
+      changed = true;
+    }
+    const nextRules = normalizeRules(policy.rules);
+    if (JSON.stringify(policy.rules) !== JSON.stringify(nextRules)) {
+      policy.rules = nextRules;
+      changed = true;
+    } else {
+      policy.rules = nextRules;
+    }
+    for (const entry of policy.accounts) {
+      if (!normalizePurpose(entry.purpose)) {
+        entry.purpose = accountPurpose(entry);
+        changed = true;
+      }
+    }
+    if (changed) writePolicy(policy);
+    return policy;
   });
 }
 
@@ -600,16 +746,211 @@ function trimAffinities(now = Date.now()) {
 }
 
 export function forgetChatGptAccountAffinities(accountId) {
+  hydrateAffinities();
   for (const [key, value] of affinities) {
     if (!accountId || value.accountId === accountId) affinities.delete(key);
   }
   if (accountId) cooldowns.delete(accountId);
+  persistAffinities();
+}
+
+function windowLeftover(window) {
+  if (!window || !Number.isFinite(window.remainingPercent)) return null;
+  return {
+    remainingPercent: window.remainingPercent,
+    ...(Number.isFinite(window.resetsAt) ? { resetsAt: window.resetsAt } : {}),
+  };
+}
+
+export function chatGptAccountIsDrained(row) {
+  return planeIsDrained(row);
+}
+
+export function chatGptAccountLeftoverHealth(row, softDrainPercent = SOFT_DRAIN_PERCENT) {
+  return leftoverHealth(row, softDrainPercent);
+}
+
+export function orderChatGptAccountCandidates(candidates, options = {}) {
+  return planeOrder(candidates, options);
+}
+
+let affinitiesHydrated = false;
+
+function persistAffinities() {
+  const recent = [];
+  const lastUsed = {};
+  for (const value of affinities.values()) {
+    if (typeof value.conversationId !== "string" || !isListedAccountId(value.accountId)) continue;
+    recent.push({
+      conversationId: value.conversationId,
+      accountId: value.accountId,
+      at: value.at,
+    });
+    if (!lastUsed[value.accountId] || value.at > lastUsed[value.accountId]) {
+      lastUsed[value.accountId] = value.at;
+    }
+  }
+  recent.sort((left, right) => left.at - right.at);
+  atomicPrivateJson(CHATGPT_ACCOUNT_AFFINITY_PATH, {
+    updatedAt: new Date().toISOString(),
+    lastUsed,
+    recent: recent.slice(-200),
+  });
+}
+
+function hydrateAffinities() {
+  if (affinitiesHydrated) return;
+  affinitiesHydrated = true;
+  try {
+    if (!existsSync(CHATGPT_ACCOUNT_AFFINITY_PATH)) return;
+    assertRegularFile(CHATGPT_ACCOUNT_AFFINITY_PATH);
+    const parsed = JSON.parse(readFileSync(CHATGPT_ACCOUNT_AFFINITY_PATH, "utf8"));
+    if (!Array.isArray(parsed?.recent)) return;
+    for (const row of parsed.recent) {
+      if (typeof row?.conversationId !== "string" || !isListedAccountId(row.accountId)) continue;
+      affinities.set(affinityKey(row.conversationId), {
+        conversationId: row.conversationId,
+        accountId: row.accountId,
+        at: Number(row.at) || 0,
+      });
+    }
+    trimAffinities();
+  } catch {
+    // Affinity files are a hint, not a safety boundary.
+  }
+}
+
+function lastAffinityAccountId() {
+  hydrateAffinities();
+  let latest;
+  for (const value of affinities.values()) {
+    if (!latest || value.at > latest.at) latest = value;
+  }
+  return latest?.accountId;
+}
+
+function persistUsageCache(snapshot) {
+  atomicPrivateJson(CHATGPT_ACCOUNT_USAGE_CACHE_PATH, {
+    fetchedAt: snapshot.fetchedAt || new Date().toISOString(),
+    preferred: snapshot.preferred,
+    using: snapshot.using,
+    skippedPreferred: snapshot.skippedPreferred,
+    routing: snapshot.routing,
+    spendToday: snapshot.spendToday || {},
+    spendByPurpose: snapshot.spendByPurpose || {},
+    rules: snapshot.rules,
+    accounts: (snapshot.accounts || []).map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      state: entry.state,
+      preferred: Boolean(entry.preferred),
+      purpose: entry.purpose,
+      health: entry.health,
+      using: Boolean(entry.using),
+      fiveHour: windowLeftover(entry.fiveHour),
+      weekly: windowLeftover(entry.weekly),
+      planType: entry.planType ?? null,
+      session: entry.session,
+      error: entry.error,
+    })),
+  });
+}
+
+function readUsageCacheFile() {
+  if (!existsSync(CHATGPT_ACCOUNT_USAGE_CACHE_PATH)) return undefined;
+  assertRegularFile(CHATGPT_ACCOUNT_USAGE_CACHE_PATH);
+  const parsed = JSON.parse(readFileSync(CHATGPT_ACCOUNT_USAGE_CACHE_PATH, "utf8"));
+  if (!Array.isArray(parsed?.accounts)) return undefined;
+  return parsed;
+}
+
+function leftoverByIdFromCache(now = Date.now(), { maxAgeMs = LEFTOVER_CACHE_MAX_AGE_MS } = {}) {
+  try {
+    const parsed = readUsageCacheFile();
+    if (!parsed) return new Map();
+    const fetchedAt = Date.parse(parsed.fetchedAt);
+    if (maxAgeMs != null && (!Number.isFinite(fetchedAt) || now - fetchedAt > maxAgeMs)) return new Map();
+    return new Map(parsed.accounts.filter((entry) => entry && typeof entry.id === "string").map((entry) => [entry.id, entry]));
+  } catch {
+    return new Map();
+  }
+}
+
+function applyLeftoverPolicy(result) {
+  try {
+    seedChatGptAccountPurposes();
+  } catch {
+    // Selection still works from inferred purposes if the policy cannot be seeded.
+  }
+  const previousById = leftoverByIdFromCache(Date.now(), { maxAgeMs: null });
+  let policy = readPolicy();
+  const rules = normalizeRules(policy.rules);
+  const purposeById = purposeByIdFromPolicy(policy);
+  const resume = reserveResumeDecisions({
+    previousById,
+    accounts: result.accounts,
+    purposeById,
+    rules,
+  });
+  for (const item of resume) {
+    try {
+      setChatGptAccountState(item.id, "active");
+    } catch {
+      // A missing or already-active reserve should not fail the probe.
+    }
+  }
+  if (resume.length) {
+    policy = readPolicy();
+    result = {
+      ...result,
+      accounts: result.accounts.map((entry) => (
+        resume.some((item) => item.id === entry.id) ? { ...entry, state: "active" } : entry
+      )),
+    };
+  }
+  const leftoverById = new Map(result.accounts.map((entry) => [entry.id, entry]));
+  const usableIds = result.accounts
+    .filter((entry) => entry.state === "active" && entry.session === "usable")
+    .map((entry) => entry.id);
+  const using = pickChatGptAccount(usableIds, selectionOptions(policy, leftoverById));
+  const skippedPreferred = Boolean(using && policy.preferred && using !== policy.preferred);
+  const spendToday = chatGptAccountSpendToday();
+  const spendByPurpose = {};
+  for (const [accountId, tokens] of Object.entries(spendToday)) {
+    const purpose = purposeById.get(accountId) || inferPurpose("", { id: accountId });
+    spendByPurpose[purpose] = (spendByPurpose[purpose] || 0) + tokens;
+  }
+  const currentChat = lastAffinityAccountId() || using;
+  const accounts = result.accounts.map((entry) => ({
+    ...entry,
+    purpose: purposeById.get(entry.id) || inferPurpose(entry.label, { id: entry.id, state: entry.state }),
+    health: leftoverHealth(entry, rules.softDrainPercent),
+    using: entry.id === using,
+    preferred: entry.id === policy.preferred,
+  }));
+  return {
+    ...result,
+    preferred: policy.preferred,
+    using,
+    skippedPreferred,
+    routing: {
+      preferred: policy.preferred,
+      using,
+      skippedPreferred,
+      currentChat,
+    },
+    spendToday,
+    spendByPurpose,
+    rules,
+    accounts,
+  };
 }
 
 export function selectChatGptAccountCandidates(callerHeaders, conversationId) {
   if (discoveryDisabled()) return [];
   const policy = readPolicy();
   const now = Date.now();
+  hydrateAffinities();
   trimAffinities(now);
   const candidates = [];
   const seenFingerprints = new Set();
@@ -643,20 +984,26 @@ export function selectChatGptAccountCandidates(callerHeaders, conversationId) {
     });
   }
   const sticky = conversationId ? affinities.get(affinityKey(conversationId))?.accountId : undefined;
-  candidates.sort((left, right) => {
-    const rank = (entry) => entry.id === sticky ? 0 : entry.id === policy.preferred ? 1 : 2;
-    return rank(left) - rank(right);
+  const ordered = orderChatGptAccountCandidates(candidates, {
+    sticky,
+    ...selectionOptions(policy, leftoverByIdFromCache(now)),
   });
-  const ready = candidates.filter((entry) => (cooldowns.get(entry.id) || 0) <= now);
-  return ready.length ? ready : candidates;
+  const ready = ordered.filter((entry) => (cooldowns.get(entry.id) || 0) <= now);
+  return ready.length ? ready : ordered;
 }
 
 export function rememberChatGptAccount(conversationId, accountId) {
   if (!conversationId) return;
+  hydrateAffinities();
   const key = affinityKey(conversationId);
   affinities.delete(key);
-  affinities.set(key, { accountId, at: Date.now() });
+  affinities.set(key, { conversationId, accountId, at: Date.now() });
   trimAffinities();
+  try {
+    persistAffinities();
+  } catch {
+    // In-memory stickiness still works if the affinity file cannot be written.
+  }
 }
 
 export function coolChatGptAccount(accountId, until) {
@@ -682,18 +1029,29 @@ function usageHomeForAccount(accountId) {
 export async function chatGptAccountsUsage({
   readUsage = readCodexAccountUsage,
   timeoutMs = 12_000,
+  cached = false,
 } = {}) {
   if (discoveryDisabled()) {
     throw new Error("ChatGPT account management is unavailable while credential discovery is disabled.");
   }
+  if (cached) {
+    try {
+      const parsed = readUsageCacheFile();
+      if (parsed?.accounts?.length) return parsed;
+    } catch {
+      // Fall through to a live leftover probe.
+    }
+  }
   const snapshot = chatGptAccountsSnapshot();
   const accounts = [];
   for (const entry of snapshot.accounts) {
+    const preferred = Boolean(entry.preferred);
     if (entry.session !== "usable") {
       accounts.push({
         id: entry.id,
         label: entry.label,
         state: entry.state,
+        preferred,
         session: entry.session,
         planType: null,
         fiveHour: null,
@@ -711,6 +1069,7 @@ export async function chatGptAccountsUsage({
         id: entry.id,
         label: entry.label,
         state: entry.state,
+        preferred,
         session: entry.session,
         planType: usage.planType ?? null,
         ...classifyCodexQuotaWindows(usage),
@@ -721,6 +1080,7 @@ export async function chatGptAccountsUsage({
         id: entry.id,
         label: entry.label,
         state: entry.state,
+        preferred,
         session: entry.session,
         planType: null,
         fiveHour: null,
@@ -729,9 +1089,31 @@ export async function chatGptAccountsUsage({
       });
     }
   }
-  return {
+  const result = applyLeftoverPolicy({
     providerId: "openai",
     fetchedAt: new Date().toISOString(),
+    preferred: snapshot.preferred,
     accounts,
+  });
+  try {
+    persistUsageCache(result);
+  } catch {
+    // Selection still works without a leftover cache.
+  }
+  return result;
+}
+
+let leftoverProbe;
+
+export function startChatGptLeftoverProbe({ intervalMs = LEFTOVER_PROBE_MS } = {}) {
+  if (leftoverProbe || discoveryDisabled()) return leftoverProbe;
+  const run = () => {
+    chatGptAccountsUsage().catch((error) => {
+      console.error(`[codex-router] chatgpt leftover probe failed: ${error instanceof Error ? error.message : error}`);
+    });
   };
+  leftoverProbe = setInterval(run, intervalMs);
+  leftoverProbe.unref?.();
+  run();
+  return leftoverProbe;
 }

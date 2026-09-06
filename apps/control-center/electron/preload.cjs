@@ -46,6 +46,10 @@ const routerControl = Object.freeze({
     call("setPreferredChatGptAccount", { accountId }),
   setChatGptAccountOrder: (accountIds) =>
     call("setChatGptAccountOrder", { accountIds }),
+  renameChatGptAccount: (accountId, label) =>
+    call("renameChatGptAccount", { accountId, label }),
+  setChatGptAccountPurpose: (accountId, purpose) =>
+    call("setChatGptAccountPurpose", { accountId, purpose }),
   setChatGptAccountPaused: (accountId, paused) =>
     call("setChatGptAccountPaused", { accountId, paused }),
   removeChatGptAccount: (accountId) =>

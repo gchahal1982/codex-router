@@ -164,8 +164,10 @@ import {
   chatGptTransportFailure,
   coolChatGptAccount,
   refreshChatGptAccount,
+  chatGptAccountsSnapshot,
   rememberChatGptAccount,
   selectChatGptAccountCandidates,
+  startChatGptLeftoverProbe,
 } from "./chatgpt-accounts.mjs";
 import {
   installStableFetchTransport,
@@ -613,6 +615,19 @@ function nativeAccountCandidates(request) {
   const headers = callerNativeHeaders(request);
   const candidates = selectChatGptAccountCandidates(headers, routedConversationId(request));
   return candidates.length ? candidates : [{ id: "default", headers }];
+}
+
+function chatgptUsageFields(accountId) {
+  if (typeof accountId !== "string" || !accountId) return {};
+  try {
+    const entry = chatGptAccountsSnapshot().accounts?.find((candidate) => candidate.id === accountId);
+    return {
+      accountId,
+      ...(entry?.label ? { accountLabel: entry.label } : {}),
+    };
+  } catch {
+    return { accountId };
+  }
 }
 
 function nativeHeaders(request) {
@@ -3989,6 +4004,7 @@ async function handleResponses(request, response, requestUrl) {
         ? { emptyCompletionPreludeLimit }
         : {}),
       ...(failoverFrom ? { failoverFrom } : {}),
+      ...(route ? {} : chatgptUsageFields(selectedChatGptAccount?.id)),
     });
     // The same usage this turn just metered, and the same two disqualifiers
     // context-window-drift.mjs applies to it: a substituted estimate and a
@@ -4316,6 +4332,7 @@ async function handleNativeRequest(request, response, requestUrl, defaultModel) 
       status: upstream.status,
       durationMs: Date.now() - startedAt,
       retries: upstreamRetries,
+      ...chatgptUsageFields(selectedChatGptAccount?.id),
     });
     if (!QUIET) {
       console.error(
@@ -4344,6 +4361,7 @@ async function handleNativeRequest(request, response, requestUrl, defaultModel) 
         durationMs: Date.now() - startedAt,
         ...(response.headersSent ? { streamAborted: true } : {}),
         requestDeadlineExceeded: true,
+        ...chatgptUsageFields(selectedChatGptAccount?.id),
       });
       activity.finish(status);
       return;
@@ -4358,6 +4376,7 @@ async function handleNativeRequest(request, response, requestUrl, defaultModel) 
         provider: "openai",
         status: 0,
         durationMs: Date.now() - startedAt,
+        ...chatgptUsageFields(selectedChatGptAccount?.id),
       });
       activity.finish(0);
       return;
@@ -4369,6 +4388,7 @@ async function handleNativeRequest(request, response, requestUrl, defaultModel) 
       status,
       durationMs: Date.now() - startedAt,
       ...(response.headersSent ? { streamAborted: true } : {}),
+      ...chatgptUsageFields(selectedChatGptAccount?.id),
     });
     activity.finish(status);
     throw error;
@@ -4554,6 +4574,7 @@ server.requestTimeout = 0;
 applyKeepAliveTimeouts(server);
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   console.error("[codex-router] listening");
+  startChatGptLeftoverProbe();
 });
 
 installGracefulShutdown(server, { label: "codex-router" });

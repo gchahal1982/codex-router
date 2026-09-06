@@ -85,3 +85,55 @@ struct IslandAccountQuotaPresentationTests {
     )
   }
 }
+
+@Suite("ChatGPT leftover banners")
+struct ChatGptQuotaAlertTests {
+  @Test("the first leftover snapshot does not notify")
+  func firstSnapshotIsQuiet() {
+    let next = snapshot(id: "default", label: "Work Pro", weekly: 4)
+    #expect(ChatGptQuotaAlert.detect(previous: nil, next: next).isEmpty)
+  }
+
+  @Test("crossing 10 percent leftover posts a critical banner")
+  func criticalCrossing() {
+    let previous = snapshot(id: "default", label: "Work Pro", weekly: 18)
+    let next = snapshot(id: "default", label: "Work Pro", weekly: 8)
+    let alerts = ChatGptQuotaAlert.detect(previous: previous, next: next)
+    #expect(alerts.count == 1)
+    #expect(alerts[0].title == "Work Pro is almost empty")
+    #expect(alerts[0].kind == .critical("weekly"))
+  }
+
+  @Test("a leftover jump after reset posts a refresh banner")
+  func resetJump() {
+    let previous = snapshot(id: "default", label: "Work Pro", weekly: 0)
+    let next = snapshot(id: "default", label: "Work Pro", weekly: 80)
+    let alerts = ChatGptQuotaAlert.detect(previous: previous, next: next)
+    #expect(alerts.count == 1)
+    #expect(alerts[0].kind == .reset("weekly"))
+  }
+
+  private func snapshot(id: String, label: String, weekly: Double) -> ChatGptAccountsUsageSnapshot {
+    ChatGptAccountsUsageSnapshot(
+      fetchedAt: "2026-09-06T00:00:00.000Z",
+      accounts: [
+        ChatGptAccountUsageRow(
+          id: id,
+          label: label,
+          state: "active",
+          session: "usable",
+          planType: "pro",
+          fiveHour: nil,
+          weekly: ChatGptAccountQuotaWindow(
+            remainingPercent: weekly,
+            usedPercent: 100 - weekly,
+            windowDurationMins: 10_080,
+            resetsAt: nil
+          ),
+          error: nil,
+          preferred: true
+        )
+      ]
+    )
+  }
+}

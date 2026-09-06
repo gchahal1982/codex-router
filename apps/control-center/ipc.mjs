@@ -700,7 +700,7 @@ export function registerIpcHandlers({
     return runJson(["provider-accounts", id, "list"]);
   });
   handle("getChatGptAccounts", async () => runJson(["chatgpt-accounts", "list"]));
-  handle("getChatGptAccountUsage", async () => runJson(["chatgpt-accounts", "usage"], { timeoutMs: 90_000 }));
+  handle("getChatGptAccountUsage", async () => runJson(["chatgpt-accounts", "usage", "--cached"], { timeoutMs: 20_000 }));
   handle("discoverProviderModels", async ({ providerId, refresh = false } = {}) => {
     const { id } = await validateCatalogProvider(providerId);
     if (typeof refresh !== "boolean") throw new Error("refresh must be boolean.");
@@ -918,6 +918,18 @@ export function registerIpcHandlers({
     }
     const selected = accountIds.map((id) => stringValue(id, "ChatGPT account", /^(?:default|chatgpt_[A-Za-z0-9_-]{16,64})$/));
     return runJson(["chatgpt-accounts", "order", ...selected]);
+  });
+  handleAction("renameChatGptAccount", async ({ accountId, label } = {}) => {
+    const selected = stringValue(accountId, "ChatGPT account", /^(?:default|chatgpt_[A-Za-z0-9_-]{16,64})$/);
+    if (typeof label !== "string" || !label.trim() || label.length > 160) {
+      throw new Error("ChatGPT account label is invalid.");
+    }
+    return runJson(["chatgpt-accounts", "rename", selected, "--label", label.trim()]);
+  });
+  handleAction("setChatGptAccountPurpose", async ({ accountId, purpose } = {}) => {
+    const selected = stringValue(accountId, "ChatGPT account", /^(?:default|chatgpt_[A-Za-z0-9_-]{16,64})$/);
+    const next = stringValue(purpose, "ChatGPT purpose", /^(?:personal|auraone|veerone|foundation|reserve)$/);
+    return runJson(["chatgpt-accounts", "purpose", selected, "--purpose", next]);
   });
   handleAction("setChatGptAccountPaused", async ({ accountId, paused = true } = {}) => {
     const selected = stringValue(accountId, "ChatGPT account", /^chatgpt_[A-Za-z0-9_-]{16,64}$/);

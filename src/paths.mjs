@@ -161,6 +161,12 @@ export const CHATGPT_ACCOUNTS_DIR =
 export const CHATGPT_ACCOUNT_POLICY_PATH =
   process.env.MODEL_ROUTER_CHATGPT_ACCOUNT_POLICY ||
   path.join(STATE_DIR, "chatgpt-account-policy.json");
+export const CHATGPT_ACCOUNT_USAGE_CACHE_PATH =
+  process.env.MODEL_ROUTER_CHATGPT_ACCOUNT_USAGE_CACHE ||
+  path.join(STATE_DIR, "chatgpt-account-usage.json");
+export const CHATGPT_ACCOUNT_AFFINITY_PATH =
+  process.env.MODEL_ROUTER_CHATGPT_ACCOUNT_AFFINITY ||
+  path.join(STATE_DIR, "chatgpt-account-affinities.json");
 export const PROVIDER_CREDENTIAL_MIGRATIONS_DIR =
   process.env.MODEL_ROUTER_PROVIDER_CREDENTIAL_MIGRATIONS ||
   path.join(MIGRATIONS_DIR, "provider-credentials");

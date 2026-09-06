@@ -156,6 +156,11 @@ export function recordUsageEvent({
   // who simply changed models, which is the difference between "your provider
   // is empty" and "you switched".
   failoverFrom,
+  // Present only on native ChatGPT turns. Historical rows omit it so older
+  // ledgers keep their exact shape. The label is a local display name, never a
+  // credential.
+  accountId,
+  accountLabel,
   at = Date.now(),
 }) {
   const event = {
@@ -189,6 +194,12 @@ export function recordUsageEvent({
     ...(safeRetryCount(retries) !== undefined ? { retries: safeRetryCount(retries) } : {}),
     ...(typeof failoverFrom === "string" && failoverFrom.trim()
       ? { failoverFrom: safeText(failoverFrom, "unknown") }
+      : {}),
+    ...(typeof accountId === "string" && /^(?:default|chatgpt_[A-Za-z0-9_-]{16,64})$/.test(accountId)
+      ? { accountId }
+      : {}),
+    ...(typeof accountLabel === "string" && accountLabel.trim()
+      ? { accountLabel: safeText(accountLabel, "account") }
       : {}),
     ...(safeTokenCount(inputTokens) !== undefined
       ? { inputTokens: safeTokenCount(inputTokens) }
@@ -481,6 +492,12 @@ export function recentUsageEvents({ sinceMs = 24 * 60 * 60 * 1000, limit = 1_000
           ...(event.emptyCompletionPreludeLimit === "bytes" ||
           event.emptyCompletionPreludeLimit === "time"
             ? { emptyCompletionPreludeLimit: event.emptyCompletionPreludeLimit }
+            : {}),
+          ...(typeof event.accountId === "string" && /^(?:default|chatgpt_[A-Za-z0-9_-]{16,64})$/.test(event.accountId)
+            ? { accountId: event.accountId }
+            : {}),
+          ...(typeof event.accountLabel === "string" && event.accountLabel.trim()
+            ? { accountLabel: safeText(event.accountLabel, "account") }
             : {}),
           ...(retries !== undefined ? { retries } : {}),
           ...(inputTokens !== undefined ? { inputTokens } : {}),

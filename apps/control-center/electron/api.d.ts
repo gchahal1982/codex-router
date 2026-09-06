@@ -97,6 +97,8 @@ export interface RouterControl {
   setProviderAccountPaused(provider: string, accountId: string, paused: boolean): Promise<unknown>;
   removeProviderAccount(provider: string, accountId: string): Promise<unknown>;
   addChatGptAccount(label: string, preferred?: boolean): Promise<unknown>;
+  renameChatGptAccount(accountId: string, label: string): Promise<unknown>;
+  setChatGptAccountPurpose(accountId: string, purpose: string): Promise<unknown>;
   setPreferredChatGptAccount(accountId: string): Promise<unknown>;
   setChatGptAccountPaused(accountId: string, paused: boolean): Promise<unknown>;
   removeChatGptAccount(accountId: string): Promise<unknown>;

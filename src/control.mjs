@@ -805,6 +805,9 @@ async function handleChatGptAccounts(command = "list", accountId) {
         preferred: args.includes("--preferred"),
       }),
     };
+  } else if (command === "rename") {
+    if (!accountId) throw new Error("A ChatGPT account id is required.");
+    result = accounts.renameChatGptAccount(accountId, optionValue("--label"));
   } else if (command === "prefer") {
     if (!accountId) throw new Error("A ChatGPT account id is required.");
     result = accounts.setPreferredChatGptAccount(accountId);
@@ -825,8 +828,11 @@ async function handleChatGptAccounts(command = "list", accountId) {
     result = { login: accounts.reloginChatGptAccount(accountId) };
   } else if (command === "order") {
     result = accounts.setChatGptAccountOrder(args.slice(args.indexOf("order") + 1));
+  } else if (command === "purpose") {
+    if (!accountId) throw new Error("A ChatGPT account id is required.");
+    result = accounts.setChatGptAccountPurpose(accountId, optionValue("--purpose"));
   } else if (command === "usage") {
-    process.stdout.write(`${JSON.stringify(await accounts.chatGptAccountsUsage())}\n`);
+    process.stdout.write(`${JSON.stringify(await accounts.chatGptAccountsUsage({ cached: args.includes("--cached") }))}\n`);
     return;
   } else if (command !== "list") {
     throw new Error("Unknown ChatGPT account command.");

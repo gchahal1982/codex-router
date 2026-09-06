@@ -30,6 +30,8 @@ test("usage events persist only bounded request metadata in a private file", asy
       toolResultBytesBefore: 80_000,
       toolResultBytesAfter: 5_000,
       toolResultBytesSaved: 75_000,
+      accountId: "default",
+      accountLabel: "Work Pro",
       prompt: "never persisted",
     });
     assert.deepEqual(usage.recentUsageEvents(), [
@@ -51,6 +53,8 @@ test("usage events persist only bounded request metadata in a private file", asy
         toolResultBytesBefore: 80_000,
         toolResultBytesAfter: 5_000,
         toolResultBytesSaved: 75_000,
+        accountId: "default",
+        accountLabel: "Work Pro",
       },
     ]);
     if (process.platform !== "win32") {

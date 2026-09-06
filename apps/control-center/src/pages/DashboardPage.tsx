@@ -867,7 +867,7 @@ function DashboardEventRow({ event }: { event: UsageEvent }) {
       />
       <span className="db-event-model">
         <strong>{shortModelName(event.model || "Unknown model")}</strong>
-        <small>{event.provider || "router"}</small>
+        <small>{[event.provider || "router", event.accountLabel].filter(Boolean).join(" · ")}</small>
       </span>
       <span className="db-event-metering">
         <strong>{speed == null ? "Speed unmeasured" : formatTokensPerSecond(speed)}</strong>

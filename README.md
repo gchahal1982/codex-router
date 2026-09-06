@@ -81,6 +81,16 @@ subscription is acquired by running the official Codex browser login inside a
 new isolated Codex home, so adding one never overwrites or logs out the active
 `~/.codex/auth.json` session. The official CLI continues to own OAuth refresh
 rotation; the router never asks for, prints, or accepts an OAuth token.
+New conversations skip subscriptions whose leftover 5-hour or weekly window is
+already empty or soft-drained (15% or less), then stay on the working account
+for that chat. Preferred is the home account, not a silent rewrite: the island
+shows when it was skipped. The router probes leftovers every 30 seconds and
+writes a shared cache the tray and Control Center read. Click a row in the
+menu-bar leftover table to make that subscription preferred. The tray banners
+when leftover crosses 10% or a window resets. Accounts can be tagged
+`personal`, `auraone`, `veerone`, `foundation`, or `reserve`; reserves stay
+paused until leftover resets or active weekly leftover is thin. Routed native
+turns record the local account label in usage history.
 
 In the desktop Control Center, open **Models**, select **OpenAI native**, choose
 **Accounts**, enter a local label, and click **Open official sign-in**. Select a
@@ -90,7 +100,9 @@ different ChatGPT account in the browser. The equivalent CLI commands are:
 ./bin/codex-router chatgpt-accounts list
 ./bin/codex-router chatgpt-accounts usage
 ./bin/codex-router chatgpt-accounts add --label "Work subscription" --preferred
+./bin/codex-router chatgpt-accounts rename default --label "Work Pro"
 ./bin/codex-router chatgpt-accounts prefer default
+./bin/codex-router chatgpt-accounts purpose default --purpose personal
 ./bin/codex-router chatgpt-accounts order default chatgpt_ID
 ./bin/codex-router chatgpt-accounts pause chatgpt_ID
 ./bin/codex-router chatgpt-accounts resume chatgpt_ID

@@ -1411,6 +1411,12 @@ test("the menu bar popover opens with the Island live dashboard", () => {
   assert.match(overlay, /struct IslandLiveDashboard: View/);
   assert.match(overlay, /private var peekContent: some View \{\s*IslandLiveDashboard\(store: store\)/s);
   assert.match(overlay, /IslandAccountQuotaTable\(store: store\)/);
+  assert.match(overlay, /struct IslandRoutingLine/);
+  assert.match(overlay, /struct IslandSpendLine/);
+  assert.match(overlay, /store\.preferChatGptAccount\(account\.id\)/);
+  assert.match(overlay, /struct ChatGptQuotaAlert/);
+  assert.match(tray, /ChatGptQuotaAlert\.detect/);
+  assert.match(tray, /chatgpt-accounts", "usage", "--cached"/);
 });
 
 test("the status item keeps native square geometry in icon-only mode", () => {

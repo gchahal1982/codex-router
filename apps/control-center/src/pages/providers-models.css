@@ -295,26 +295,29 @@
 }
 
 .dialog-panel:has(.pm-account-list) {
-  width: min(100%, 760px);
+  width: min(100%, 640px);
 }
 
 .pm-account-list {
   display: grid;
-  gap: 7px;
+  gap: 5px;
   max-height: 68vh;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   overflow: auto;
 }
 
 .pm-account-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 9px 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px;
+  padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--surface-1);
+}
+.pm-account-row:has(.pm-account-drag) {
+  grid-template-columns: 16px minmax(0, 1fr);
 }
 
 .pm-account-row.is-dragging { opacity: 0.55; }
@@ -331,30 +334,84 @@
 .pm-account-drag:active { cursor: grabbing; }
 
 .pm-account-main { min-width: 0; }
+.pm-account-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.pm-account-head > .pm-account-name,
+.pm-account-head > .pm-account-rename-input {
+  flex: 1 1 auto;
+}
 
 .pm-account-row strong,
 .pm-account-row small {
   display: block;
 }
 
-.pm-account-row > .pm-account-main > strong { color: var(--ink-strong); font-size: 11px; }
-.pm-account-row small { margin-top: 2px; color: var(--ink-subtle); font-size: 9px; }
+.pm-account-row > .pm-account-main > strong,
+.pm-account-name {
+  color: var(--ink-strong);
+  font-size: 11px;
+  font-weight: 650;
+}
+.pm-account-name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+.pm-account-name:hover,
+.pm-account-name:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pm-account-name:disabled { cursor: default; text-decoration: none; }
+.pm-account-rename-input {
+  box-sizing: border-box;
+  width: min(100%, 280px);
+  margin: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface, #fff);
+  color: var(--ink-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+}
+.pm-account-row small { margin-top: 1px; color: var(--ink-subtle); font-size: 9px; }
 .pm-account-quotas {
   display: grid;
-  gap: 2px;
-  margin-top: 8px;
+  gap: 0;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 4px;
 }
 .pm-account-quota,
 .pm-account-quota-note {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
+.pm-account-quota-note { margin-top: 4px; }
 .pm-account-quota {
   display: grid;
-  grid-template-columns: 58px 48px minmax(112px, 1fr) 56px;
+  grid-template-columns: 44px 34px 104px 40px;
   align-items: baseline;
-  gap: 12px;
+  column-gap: 8px;
   font-size: 10px;
+  line-height: 1.35;
 }
 .pm-account-quota.is-head {
   color: var(--ink-subtle);
@@ -368,13 +425,12 @@
 .pm-account-quota-in {
   color: var(--ink-subtle);
   text-align: right;
-  justify-self: end;
   font-variant-numeric: tabular-nums;
 }
 .pm-account-quota strong {
   display: inline;
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -382,16 +438,38 @@
 .pm-account-quota.is-critical strong { color: var(--danger, #c23b2e); }
 .pm-account-refresh {
   display: block;
-  margin: -8px 0 12px;
+  margin: -4px 0 8px;
   color: var(--ink-subtle);
   font-size: 9px;
 }
+.pm-account-routing {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 10px;
+}
+.pm-account-purpose {
+  max-width: 92px;
+  margin: 0;
+  padding: 1px 4px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  font-size: 10px;
+}
 .pm-account-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  padding-top: 1px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+}
+.pm-account-actions .button {
+  min-height: 0;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 10px;
 }
 .pm-account-form { padding-top: 12px; border-top: 1px solid var(--line); }
 .pm-account-form > strong { color: var(--ink-strong); font-size: 11px; }

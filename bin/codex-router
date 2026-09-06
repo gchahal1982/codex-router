@@ -48,6 +48,7 @@ Providers and models
   refresh-catalog   Rebuild the merged model catalog
   test-model        Send one small billed request to a model
   local-mlx         Install or inspect the supported local MLX model
+  picker            Show or hide routed models in installed client pickers
 
 Maintenance
   update            Update the installation (Git checkouts only)
@@ -79,6 +80,9 @@ shift
 case $command in
   codex | dsh | gemini)
     exec "$bin_dir/model-router" "$command" "$@"
+    ;;
+  picker)
+    exec node "$repo_dir/src/control.mjs" picker "$@"
     ;;
 esac
 

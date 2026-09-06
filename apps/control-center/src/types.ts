@@ -302,6 +302,7 @@ export interface ProviderAccountEntry {
   plan: string | null;
   state: "active" | "paused" | "missing" | string;
   preferred: boolean;
+  purpose?: "personal" | "auraone" | "veerone" | "foundation" | "reserve" | string;
   source: string | null;
   session?: "usable" | "expired" | "unavailable" | string;
   expiresInHours?: number;
@@ -318,6 +319,10 @@ export interface ChatGptAccountUsage {
   id: string;
   label: string;
   state: string;
+  preferred?: boolean;
+  purpose?: string;
+  health?: "healthy" | "soft" | "drained" | "unknown" | string;
+  using?: boolean;
   session?: string;
   planType?: string | null;
   fiveHour?: ChatGptAccountQuotaWindow | null;
@@ -327,9 +332,22 @@ export interface ChatGptAccountUsage {
   error?: string;
 }
 
+export interface ChatGptRoutingHint {
+  preferred?: string;
+  using?: string;
+  skippedPreferred?: boolean;
+  currentChat?: string;
+}
+
 export interface ChatGptAccountsUsageSnapshot {
   providerId: "openai" | string;
   fetchedAt?: string;
+  preferred?: string;
+  using?: string;
+  skippedPreferred?: boolean;
+  routing?: ChatGptRoutingHint;
+  spendToday?: Record<string, number>;
+  spendByPurpose?: Record<string, number>;
   accounts: ChatGptAccountUsage[];
 }
 
@@ -535,6 +553,8 @@ export interface UsageEvent {
   emptyCompletionUnrepairable?: boolean;
   emptyCompletionGuardReleased?: boolean;
   emptyCompletionPreludeLimit?: "bytes" | "time";
+  accountId?: string;
+  accountLabel?: string;
 }
 
 export interface ActiveRequest {
@@ -693,6 +713,8 @@ export interface RouterControlApi {
   addChatGptAccount(label: string, preferred?: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
   setPreferredChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   setChatGptAccountOrder(accountIds: string[]): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  renameChatGptAccount(accountId: string, label: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
+  setChatGptAccountPurpose(accountId: string, purpose: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   setChatGptAccountPaused(accountId: string, paused: boolean): Promise<{ accounts: ProviderAccountsSnapshot }>;
   removeChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
   refreshChatGptAccount(accountId: string): Promise<{ accounts: ProviderAccountsSnapshot }>;
