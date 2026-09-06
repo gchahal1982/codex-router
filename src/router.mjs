@@ -70,6 +70,11 @@ import { readNativeAliases } from "./native-alias.mjs";
 import { nativeContextVariantBase } from "./native-context-variants.mjs";
 import { readNativeRedirect } from "./native-redirect.mjs";
 import {
+  followOperatorModel,
+  isNativeOpenAIRoute,
+  rememberOperatorModel,
+} from "./operator-model.mjs";
+import {
   canonicalProviderId,
   readProviderSelection,
   selectedConfiguredListedModels,
@@ -168,6 +173,8 @@ import {
   rememberChatGptAccount,
   selectChatGptAccountCandidates,
   startChatGptLeftoverProbe,
+  chatgptLeftoverCanDecrypt,
+  leftoverByIdFromCache,
 } from "./chatgpt-accounts.mjs";
 import {
   installStableFetchTransport,
@@ -1308,8 +1315,13 @@ function parseRelayedAgentPayloadSse(bytes) {
   return undefined;
 }
 
-function nativeRelayContext(request) {
-  const headers = nativeHeaders(request);
+const OMITTED_NATIVE_AGENT_PAYLOAD =
+  "[Omitted encrypted collaboration payload: ChatGPT leftover is exhausted. Continue from the visible transcript.]";
+const LEFTOVER_RELAY_BACKOFF_MS = 60_000;
+let leftoverRelayBlockedUntil = 0;
+let leftoverRelaySkipLogged = false;
+
+function nativeRelayContext(request, headers = nativeHeaders(request)) {
   const authorization =
     typeof headers.authorization === "string" ? headers.authorization : "";
   const account = nativeAccountKey(headers);
@@ -1322,6 +1334,38 @@ function nativeRelayContext(request) {
     .update(account)
     .digest("base64url");
   return { accountScope, headers };
+}
+
+function leftoverRelayBlocked(now = Date.now()) {
+  return leftoverRelayBlockedUntil > now || !chatgptLeftoverCanDecrypt(now);
+}
+
+function blockLeftoverRelay(until = Date.now() + LEFTOVER_RELAY_BACKOFF_MS) {
+  leftoverRelayBlockedUntil = Math.max(leftoverRelayBlockedUntil, until);
+}
+
+function omittedNativeAgentPayload() {
+  if (!leftoverRelaySkipLogged) {
+    leftoverRelaySkipLogged = true;
+    console.error(
+      "[codex-router] skipping native collaboration decrypt: ChatGPT leftover exhausted; continuing on the routed model",
+    );
+  }
+  return OMITTED_NATIVE_AGENT_PAYLOAD;
+}
+
+function nativeDecryptCandidates(request) {
+  const candidates = nativeAccountCandidates(request);
+  const leftoverById = leftoverByIdFromCache();
+  const usable = candidates.filter((candidate) => leftoverById.get(candidate.id)?.health !== "drained");
+  return usable.length ? usable : candidates;
+}
+
+function leftoverRelayRetryAfterMs(response) {
+  const raw = response?.headers?.get?.("retry-after") || response?.headers?.get?.("Retry-After");
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds * 1000, 15 * 60_000);
+  return LEFTOVER_RELAY_BACKOFF_MS;
 }
 
 function agentPayloadCacheKey(encrypted, accountScope) {
@@ -1436,7 +1480,9 @@ async function relayEncryptedAgentPayloadOnce(
     const error = new Error(
       `Native collaboration payload relay failed with HTTP ${upstream.status}.`,
     );
-    error.status = 502;
+    error.status = upstream.status === 401 || upstream.status === 403 ? 502 : upstream.status;
+    error.upstreamStatus = upstream.status;
+    error.retryAfterMs = leftoverRelayRetryAfterMs(upstream);
     throw error;
   }
   if (bytes.length > 4 * 1024 * 1024) {
@@ -1502,38 +1548,59 @@ function waitForAgentPayloadRelay(pending, signal) {
 }
 
 async function relayEncryptedAgentPayload(request, item, encrypted, signal) {
-  const { accountScope, headers } = nativeRelayContext(request);
-  const key = agentPayloadCacheKey(encrypted, accountScope);
-  const cached = cachedAgentPayload(key);
-  if (cached !== undefined) return cached;
-  const pending = agentPayloadCacheInFlight.get(key);
-  if (pending) {
-    agentPayloadCacheMetrics.coalesced += 1;
-    return waitForAgentPayloadRelay(pending, signal);
+  const candidates = nativeDecryptCandidates(request);
+  for (const candidate of candidates) {
+    const { accountScope } = nativeRelayContext(request, candidate.headers);
+    const cached = cachedAgentPayload(agentPayloadCacheKey(encrypted, accountScope));
+    if (cached !== undefined) return cached;
   }
-  const controller = new AbortController();
-  const operation = {
-    controller,
-    promise: undefined,
-    settled: false,
-    waiters: 0,
-  };
-  operation.promise = relayEncryptedAgentPayloadOnce(
-    item,
-    key,
-    headers,
-    controller.signal,
-  ).finally(() => {
-    operation.settled = true;
-    if (agentPayloadCacheInFlight.get(key) === operation) {
-      agentPayloadCacheInFlight.delete(key);
+  if (leftoverRelayBlocked()) return omittedNativeAgentPayload();
+  let lastLeftoverError;
+  for (const candidate of candidates) {
+    const { accountScope, headers } = nativeRelayContext(request, candidate.headers);
+    const key = agentPayloadCacheKey(encrypted, accountScope);
+    const pending = agentPayloadCacheInFlight.get(key);
+    if (pending) {
+      agentPayloadCacheMetrics.coalesced += 1;
+      return waitForAgentPayloadRelay(pending, signal);
     }
-  });
-  // If every waiter disconnects, the shared operation is aborted and may
-  // reject after nobody remains to await it. Mark that rejection observed.
-  operation.promise.catch(() => {});
-  agentPayloadCacheInFlight.set(key, operation);
-  return waitForAgentPayloadRelay(operation, signal);
+    const controller = new AbortController();
+    const operation = {
+      controller,
+      promise: undefined,
+      settled: false,
+      waiters: 0,
+    };
+    operation.promise = relayEncryptedAgentPayloadOnce(
+      item,
+      key,
+      headers,
+      controller.signal,
+    ).finally(() => {
+      operation.settled = true;
+      if (agentPayloadCacheInFlight.get(key) === operation) {
+        agentPayloadCacheInFlight.delete(key);
+      }
+    });
+    // If every waiter disconnects, the shared operation is aborted and may
+    // reject after nobody remains to await it. Mark that rejection observed.
+    operation.promise.catch(() => {});
+    agentPayloadCacheInFlight.set(key, operation);
+    try {
+      return await waitForAgentPayloadRelay(operation, signal);
+    } catch (error) {
+      if (error?.name === "AbortError" || signal?.aborted) throw error;
+      const leftover = error?.upstreamStatus === 429;
+      if (!leftover) throw error;
+      lastLeftoverError = error;
+      coolChatGptAccount(candidate.id, Date.now() + (error.retryAfterMs || LEFTOVER_RELAY_BACKOFF_MS));
+    }
+  }
+  if (lastLeftoverError) {
+    blockLeftoverRelay(Date.now() + (lastLeftoverError.retryAfterMs || LEFTOVER_RELAY_BACKOFF_MS));
+    return omittedNativeAgentPayload();
+  }
+  throw lastLeftoverError || new Error("Native collaboration payload relay failed.");
 }
 
 async function normalizeRoutedAgentInput(request, input, signal) {
@@ -3189,6 +3256,21 @@ async function handleResponses(request, response, requestUrl) {
       if (redirect && readProviderSelection().includes(redirect.provider)) {
         registeredRoute = redirect;
       }
+    }
+    if (registeredRoute && !isNativeOpenAIRoute(registeredRoute)) {
+      try {
+        rememberOperatorModel(registeredRoute);
+      } catch {
+        // Following a remembered model still works if the hint file cannot be written.
+      }
+    }
+    const followed = followOperatorModel(registeredRoute, {
+      modelsBySlug: MODEL_BY_SLUG,
+      enabledProviders: readProviderSelection(),
+      fallbackSlug: readNativeRedirect(),
+    });
+    if (followed && followed !== registeredRoute) {
+      registeredRoute = followed;
     }
     route = registeredRoute && readProviderSelection().includes(registeredRoute.provider)
       ? registeredRoute

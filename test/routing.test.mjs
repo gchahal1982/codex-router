@@ -1258,6 +1258,67 @@ test("router fails closed when an encrypted subagent payload cannot be relayed",
   }
 });
 
+test("router continues a routed turn when leftover blocks native collaboration decrypt", async () => {
+  let nativeRequests = 0;
+  const native = await mockServer(async (_request, response) => {
+    nativeRequests += 1;
+    json(response, 429, { error: { message: "rate limit exceeded" } });
+  });
+  const gatewayRequests = [];
+  const gateway = await mockServer(async (request, response) => {
+    gatewayRequests.push(await bodyJson(request));
+    json(response, 200, { route: "external" });
+  });
+  const routerPort = await openPort();
+  const router = run("router.mjs", {
+    CODEX_ROUTER_PORT: String(routerPort),
+    CODEX_NATIVE_BASE_URL: `http://127.0.0.1:${native.port}/backend-api/codex`,
+    CODEX_ROUTER_GATEWAY_BASE_URL: `http://127.0.0.1:${gateway.port}/v1`,
+    CODEX_ROUTER_QUIET: "1",
+  });
+
+  try {
+    await waitFor(`${routerBase(routerPort)}/models`, router);
+    const response = await fetch(`${routerBase(routerPort)}/responses`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer CHATGPT_SESSION_TOKEN",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "kimi-oauth/k3",
+        stream: false,
+        input: [
+          {
+            type: "agent_message",
+            content: [
+              { type: "input_text", text: "Message Type: MESSAGE\nPayload:\n" },
+              { type: "encrypted_content", encrypted_content: "gAAAAA-unreadable=" },
+            ],
+          },
+          {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: "continue" }],
+          },
+        ],
+      }),
+    });
+    assert.equal(response.status, 200, await response.text());
+    assert.equal(nativeRequests, 1);
+    assert.equal(gatewayRequests.length, 1);
+    const content = gatewayRequests[0].input[0].content;
+    assert.equal(content.some((part) => part.type === "encrypted_content"), false);
+    assert.match(
+      content.at(-1).text,
+      /Omitted encrypted collaboration payload: ChatGPT leftover is exhausted/,
+    );
+  } finally {
+    await stopChild(router);
+    await Promise.all([closeServer(native.server), closeServer(gateway.server)]);
+  }
+});
+
 test("router sends standalone image requests only to the native OpenAI backend", async () => {
   const nativeRequests = [];
   const native = await mockServer(async (request, response) => {

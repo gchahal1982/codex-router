@@ -864,7 +864,7 @@ function readUsageCacheFile() {
   return parsed;
 }
 
-function leftoverByIdFromCache(now = Date.now(), { maxAgeMs = LEFTOVER_CACHE_MAX_AGE_MS } = {}) {
+export function leftoverByIdFromCache(now = Date.now(), { maxAgeMs = LEFTOVER_CACHE_MAX_AGE_MS } = {}) {
   try {
     const parsed = readUsageCacheFile();
     if (!parsed) return new Map();
@@ -874,6 +874,16 @@ function leftoverByIdFromCache(now = Date.now(), { maxAgeMs = LEFTOVER_CACHE_MAX
   } catch {
     return new Map();
   }
+}
+
+export function chatgptLeftoverCanDecrypt(now = Date.now()) {
+  const leftover = leftoverByIdFromCache(now);
+  if (!(leftover instanceof Map) || leftover.size === 0) return true;
+  for (const row of leftover.values()) {
+    if (row?.state && row.state !== "active") continue;
+    if (leftoverHealth(row) !== "drained") return true;
+  }
+  return false;
 }
 
 function applyLeftoverPolicy(result) {

@@ -1414,6 +1414,11 @@ test("the menu bar popover opens with the Island live dashboard", () => {
   assert.match(overlay, /struct IslandRoutingLine/);
   assert.match(overlay, /struct IslandSpendLine/);
   assert.match(overlay, /store\.preferChatGptAccount\(account\.id\)/);
+  assert.match(overlay, /store\.setChatGptAccountEnabled\(account\.id, account\.state == "paused"\)/);
+  assert.match(overlay, /struct IslandDenseSwitch: View/);
+  assert.match(tray, /case runtime/);
+  assert.match(tray, /func setChatGptAccountEnabled\(/);
+  assert.match(tray, /chatgpt-accounts", enabled \? "resume" : "pause"/);
   assert.match(overlay, /struct ChatGptQuotaAlert/);
   assert.match(tray, /ChatGptQuotaAlert\.detect/);
   assert.match(tray, /chatgpt-accounts", "usage", "--cached"/);

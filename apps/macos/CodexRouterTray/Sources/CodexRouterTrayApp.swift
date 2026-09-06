@@ -27,6 +27,7 @@ struct RouterControlContract: Decodable, Equatable {
 enum RouterControlAccess: Equatable {
   case read
   case recovery
+  case runtime
   case mutation
 }
 
@@ -46,9 +47,16 @@ enum RouterControlContractPolicy {
       || arguments == ["vision-bridge", "pull-status"]
       || arguments == ["chatgpt-session", "status"]
       || arguments == ["chatgpt-accounts", "usage"]
+      || arguments.starts(with: ["chatgpt-accounts", "usage"])
       || arguments == ["health", "--json"]
     {
       return .read
+    }
+    if arguments.first == "chatgpt-accounts",
+      let command = arguments.dropFirst().first,
+      ["pause", "resume", "prefer", "purpose"].contains(command)
+    {
+      return .runtime
     }
     // These are the escape hatch from a mismatched/broken install, or the
     // runtime-only service transition needed to leave follow mode safely.
@@ -1851,6 +1859,61 @@ final class RouterStore: ObservableObject {
     } catch {
       // Keep the last readable snapshot so a slow or failed probe does not
       // blank the dense leftover table.
+    }
+  }
+
+  func setChatGptAccountEnabled(_ accountId: String, _ enabled: Bool) async {
+    guard
+      accountId != "default",
+      let current = chatGptAccountUsage,
+      let account = current.accounts.first(where: { $0.id == accountId })
+    else { return }
+    let nextState = enabled ? "active" : "paused"
+    if account.state == nextState { return }
+    do {
+      _ = try await runControl(arguments: ["chatgpt-accounts", enabled ? "resume" : "pause", accountId])
+      let nextPreferred = (!enabled && (account.preferred == true || current.preferred == accountId))
+        ? "default"
+        : (current.preferred ?? current.accounts.first(where: { $0.preferred == true })?.id)
+      let nextUsing = (!enabled && (current.using == accountId || current.routing?.using == accountId))
+        ? nextPreferred
+        : current.using
+      let nextCurrentChat = (!enabled && current.routing?.currentChat == accountId)
+        ? nextUsing
+        : current.routing?.currentChat
+      let nextRouting = ChatGptRoutingHint(
+        preferred: nextPreferred,
+        using: nextUsing,
+        skippedPreferred: nextUsing != nil && nextPreferred != nil && nextUsing != nextPreferred,
+        currentChat: nextCurrentChat
+      )
+      chatGptAccountUsage = ChatGptAccountsUsageSnapshot(
+        fetchedAt: current.fetchedAt,
+        accounts: current.accounts.map { row in
+          ChatGptAccountUsageRow(
+            id: row.id,
+            label: row.label,
+            state: row.id == accountId ? nextState : row.state,
+            session: row.session,
+            planType: row.planType,
+            fiveHour: row.fiveHour,
+            weekly: row.weekly,
+            error: row.error,
+            preferred: row.id == nextPreferred,
+            purpose: row.purpose,
+            health: row.health,
+            using: row.id == nextUsing
+          )
+        },
+        preferred: nextPreferred,
+        using: nextUsing,
+        skippedPreferred: nextRouting.skippedPreferred,
+        routing: nextRouting,
+        spendToday: current.spendToday,
+        spendByPurpose: current.spendByPurpose
+      )
+    } catch {
+      message = error.localizedDescription
     }
   }
 

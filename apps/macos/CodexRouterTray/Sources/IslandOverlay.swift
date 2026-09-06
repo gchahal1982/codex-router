@@ -249,14 +249,15 @@ private struct IslandOverlayView: View {
                 )
               )
           }
+          .contentShape(IslandSilhouette())
+          .onTapGesture {
+            if display.state != .expanded { display.setState(.expanded) }
+          }
         glow
+          .allowsHitTesting(false)
         content
       }
       .frame(width: display.size.width, height: display.size.height)
-      .contentShape(IslandSilhouette())
-      .onTapGesture {
-        if display.state != .expanded { display.setState(.expanded) }
-      }
       .animation(
         reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82),
         value: display.state
@@ -877,6 +878,9 @@ private func islandActivitySessions(store: RouterStore) -> [IslandActivitySessio
 
 enum IslandAccountQuotaPresentation {
   static let rowHeight: CGFloat = 18
+  static let toggleWidth: CGFloat = 16
+  static let toggleHitWidth: CGFloat = 22
+  static let toggleHeight: CGFloat = 9
   static let headerHeight: CGFloat = 16
 
   nonisolated static func percentText(_ remaining: Double?) -> String {
@@ -1097,13 +1101,41 @@ private struct IslandSpendLine: View {
   }
 }
 
+private struct IslandDenseSwitch: View {
+  let isOn: Bool
+  var locked = false
+
+  var body: some View {
+    ZStack(alignment: isOn ? .trailing : .leading) {
+      Capsule()
+        .fill(trackColor)
+        .frame(
+          width: IslandAccountQuotaPresentation.toggleWidth,
+          height: IslandAccountQuotaPresentation.toggleHeight
+        )
+      Circle()
+        .fill(Color.white.opacity(locked ? 0.55 : 0.94))
+        .frame(width: 7, height: 7)
+        .padding(.horizontal, 1)
+    }
+    .animation(.easeInOut(duration: 0.12), value: isOn)
+  }
+
+  private var trackColor: Color {
+    if locked { return routerAccent.opacity(0.38) }
+    return isOn ? routerAccent.opacity(0.92) : Color.white.opacity(0.16)
+  }
+}
+
 private struct IslandAccountQuotaTable: View {
   @ObservedObject var store: RouterStore
 
   var body: some View {
     TimelineView(.periodic(from: .now, by: 15)) { timeline in
-      VStack(alignment: .leading, spacing: 3) {
-        HStack(spacing: 6) {
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 5) {
+          Color.clear
+            .frame(width: IslandAccountQuotaPresentation.toggleHitWidth)
           Text(routerLocalized("All usage"))
             .font(.system(size: 8, weight: .semibold, design: .monospaced))
             .foregroundStyle(routerMuted)
@@ -1120,42 +1152,69 @@ private struct IslandAccountQuotaTable: View {
 
         if let accounts = store.chatGptAccountUsage?.accounts, !accounts.isEmpty {
           ForEach(accounts) { account in
-            Button {
-              Task { await store.preferChatGptAccount(account.id) }
-            } label: {
-              HStack(spacing: 6) {
-                if account.preferred == true {
-                  Text("●")
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(routerAccent)
-                }
-                Text(account.label)
-                  .font(.system(size: 10, weight: account.preferred == true ? .semibold : .medium, design: .rounded))
-                  .foregroundStyle(account.state == "paused" ? routerMuted : .white.opacity(0.92))
-                  .lineLimit(1)
-                Spacer(minLength: 6)
-                quotaValue(account.fiveHour?.remainingPercent, width: 32)
-                countdownValue(account.fiveHour, now: timeline.date)
-                quotaValue(account.weekly?.remainingPercent, width: 32)
+            HStack(spacing: 5) {
+              Button {
+                Task { await store.setChatGptAccountEnabled(account.id, account.state == "paused") }
+              } label: {
+                IslandDenseSwitch(isOn: account.state != "paused", locked: account.id == "default")
+                  .frame(width: IslandAccountQuotaPresentation.toggleHitWidth, height: IslandAccountQuotaPresentation.rowHeight)
+                  .contentShape(Rectangle())
               }
-              .frame(height: IslandAccountQuotaPresentation.rowHeight)
-              .contentShape(Rectangle())
+              .buttonStyle(.plain)
+              .disabled(account.id == "default")
+              .help(
+                account.id == "default"
+                  ? routerLocalized("Home login stays on")
+                  : account.state == "paused"
+                    ? routerLocalized("Turn this subscription on")
+                    : routerLocalized("Turn this subscription off")
+              )
+              .accessibilityLabel(
+                account.id == "default"
+                  ? routerLocalized("Home login stays on")
+                  : account.state == "paused"
+                    ? routerLocalized("Turn this subscription on")
+                    : routerLocalized("Turn this subscription off")
+              )
+
+              Button {
+                Task { await store.preferChatGptAccount(account.id) }
+              } label: {
+                HStack(spacing: 6) {
+                  if account.preferred == true {
+                    Text("●")
+                      .font(.system(size: 7, weight: .bold))
+                      .foregroundStyle(routerAccent)
+                  }
+                  Text(account.label)
+                    .font(.system(size: 10, weight: account.preferred == true ? .semibold : .medium, design: .rounded))
+                    .foregroundStyle(account.state == "paused" ? routerMuted : .white.opacity(0.92))
+                    .lineLimit(1)
+                  Spacer(minLength: 6)
+                  quotaValue(account.fiveHour?.remainingPercent, width: 32)
+                  countdownValue(account.fiveHour, now: timeline.date)
+                  quotaValue(account.weekly?.remainingPercent, width: 32)
+                }
+                .frame(height: IslandAccountQuotaPresentation.rowHeight)
+                .contentShape(Rectangle())
+              }
+              .buttonStyle(.plain)
+              .disabled(account.state == "paused")
+              .help(
+                account.state == "paused"
+                  ? routerLocalized("Paused accounts stay out of rotation")
+                  : account.preferred == true
+                    ? routerLocalized("Preferred subscription")
+                    : routerLocalized("Click to prefer this subscription")
+              )
+              .accessibilityLabel(accessibilityLabel(for: account, now: timeline.date))
+              .accessibilityHint(
+                account.state == "paused" || account.preferred == true
+                  ? ""
+                  : routerLocalized("Double-click to prefer this subscription")
+              )
             }
-            .buttonStyle(.plain)
-            .disabled(account.state == "paused")
-            .help(
-              account.state == "paused"
-                ? routerLocalized("Paused accounts stay out of rotation")
-                : account.preferred == true
-                  ? routerLocalized("Preferred subscription")
-                  : routerLocalized("Click to prefer this subscription")
-            )
-            .accessibilityLabel(accessibilityLabel(for: account, now: timeline.date))
-            .accessibilityHint(
-              account.state == "paused" || account.preferred == true
-                ? ""
-                : routerLocalized("Double-click to prefer this subscription")
-            )
+            .frame(height: IslandAccountQuotaPresentation.rowHeight)
           }
         } else {
           Text(routerLocalized("Loading native Codex usage…"))
