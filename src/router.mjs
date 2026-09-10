@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import http from "node:http";
 import { createHash, randomUUID } from "node:crypto";
+import os from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import {
   brotliDecompressSync,
   gunzipSync,
@@ -182,6 +185,26 @@ import {
 } from "./fetch-transport.mjs";
 
 installStableFetchTransport();
+
+const CODEX_THREAD_DATABASE =
+  process.env.MODEL_ROUTER_CODEX_STATE_DATABASE ||
+  path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "state_5.sqlite");
+
+function internalThreadModel(request, requestedModel) {
+  if (!requestedModel || requestedModel.includes("/")) return {};
+  const threadId = threadIdFromHeaders(request.headers);
+  if (!threadId) return {};
+  let database;
+  try {
+    database = new DatabaseSync(CODEX_THREAD_DATABASE, { readOnly: true });
+    const model = database.prepare("select model from threads where id = ? limit 1").get(threadId)?.model;
+    return typeof model === "string" && model.trim() ? { model: model.trim() } : {};
+  } catch {
+    return {};
+  } finally {
+    database?.close();
+  }
+}
 
 const LISTEN_HOST =
   process.env.CODEX_ROUTER_HOST || process.env.KIMI_ROUTER_HOST || "127.0.0.1";
@@ -3241,8 +3264,20 @@ async function handleResponses(request, response, requestUrl) {
     const body = decodeBody(encoded, request.headers["content-encoding"]);
     const payload = await parseBodyAsync(body);
     controller.signal.throwIfAborted();
+    const compactV1 = /\/responses\/compact$/.test(requestUrl.pathname);
+    // Codex remote compaction V2 uses the ordinary Responses endpoint with a
+    // terminal trigger. Detect both forms before route selection: Codex may
+    // replace the conversation model with an internal native slug while
+    // compacting, and that internal turn must stay on the routed model.
+    const compactV2 =
+      Array.isArray(payload.input) &&
+      payload.input.at(-1)?.type === "compaction_trigger";
     requestedModel = typeof payload.model === "string" ? payload.model : "";
+    const threadModel = compactV1 || compactV2
+      ? undefined
+      : internalThreadModel(request, requestedModel).model;
     let registeredRoute =
+      MODEL_BY_SLUG.get(threadModel) ??
       MODEL_BY_SLUG.get(requestedModel) ??
       MODEL_BY_SLUG.get(readNativeAliases()[requestedModel]);
     // An unregistered model on this endpoint is native GPT traffic -- Codex's
@@ -3264,10 +3299,13 @@ async function handleResponses(request, response, requestUrl) {
         // Following a remembered model still works if the hint file cannot be written.
       }
     }
-    // Only delegated/background agents inherit the operator's routed model.
-    // A main-thread native slug came from an explicit picker selection and
-    // must remain on ChatGPT's native Codex path.
-    const followed = request.headers["x-openai-subagent"]
+    // Delegated/background agents and internal compaction turns inherit the
+    // operator's routed model. An ordinary main-thread native slug came from
+    // an explicit picker selection and must remain on ChatGPT's native path.
+    const followed = request.headers["x-openai-subagent"] ||
+      compactV1 ||
+      compactV2 ||
+      (!threadModel && requestedModel === "gpt-reserve")
       ? followOperatorModel(registeredRoute, {
           modelsBySlug: MODEL_BY_SLUG,
           enabledProviders: readProviderSelection(),
@@ -3304,14 +3342,6 @@ async function handleResponses(request, response, requestUrl) {
       model: route?.slug || requestedModel || undefined,
       ...activityMetadataFromHeaders(request.headers),
     });
-    const compactV1 = /\/responses\/compact$/.test(requestUrl.pathname);
-    // Codex remote compaction V2 uses the ordinary Responses endpoint with a
-    // terminal trigger. Detect the protocol shape before route dispatch so the
-    // native path can also preserve the full tool results being summarized.
-    const compactV2 =
-      Array.isArray(payload.input) &&
-      payload.input.at(-1)?.type === "compaction_trigger";
-
     if (route && (compactV1 || compactV2)) {
       const compaction = await handleRoutedCompaction(
         request,

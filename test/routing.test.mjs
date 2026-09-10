@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
@@ -5733,7 +5734,7 @@ test("router redirects native background turns to the configured routed model", 
   }
 });
 
-test("native picker selections stay native while subagents inherit the routed model", async () => {
+test("native picker selections stay native while internal turns inherit the routed model", async () => {
   const nativeRequests = [];
   const gatewayRequests = [];
   const native = await mockServer(async (request, response) => {
@@ -5748,6 +5749,18 @@ test("native picker selections stay native while subagents inherit the routed mo
   const testRoot = mkdtempSync(path.join(os.tmpdir(), "codex-router-native-picker-"));
   const stateDir = path.join(testRoot, "state");
   mkdirSync(stateDir, { recursive: true });
+  const stateDatabase = path.join(testRoot, "state.sqlite");
+  const database = new DatabaseSync(stateDatabase);
+  database.exec("create table threads (id text primary key, model text)");
+  database.prepare("insert into threads values (?, ?)").run(
+    "11111111-1111-4111-8111-111111111111",
+    "kimi-oauth/k3",
+  );
+  database.prepare("insert into threads values (?, ?)").run(
+    "22222222-2222-4222-8222-222222222222",
+    "gpt-6-astra",
+  );
+  database.close();
   writeFileSync(
     path.join(stateDir, "operator-model.json"),
     `${JSON.stringify({ version: 1, slug: "kimi-oauth/k3", native: false })}\n`,
@@ -5757,6 +5770,7 @@ test("native picker selections stay native while subagents inherit the routed mo
     CODEX_NATIVE_BASE_URL: `http://127.0.0.1:${native.port}/backend-api/codex`,
     CODEX_ROUTER_GATEWAY_BASE_URL: `http://127.0.0.1:${gateway.port}/v1`,
     CODEX_ROUTER_STATE_DIR: stateDir,
+    MODEL_ROUTER_CODEX_STATE_DATABASE: stateDatabase,
     CODEX_ROUTER_QUIET: "1",
   });
 
@@ -5769,7 +5783,24 @@ test("native picker selections stay native while subagents inherit the routed mo
     },
     body: JSON.stringify({ model: "gpt-6-astra", input: "route test" }),
   });
-
+  const compact = (endpoint, input, threadId) => fetch(`${routerBase(routerPort)}${endpoint}`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer CODEX_CALLER_SECRET",
+      "Content-Type": "application/json",
+      ...(threadId ? { "Thread-Id": threadId } : {}),
+    },
+    body: JSON.stringify({ model: "gpt-reserve", input }),
+  });
+  const continuation = (threadId, model = "gpt-reserve") => fetch(`${routerBase(routerPort)}/responses`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer CODEX_CALLER_SECRET",
+      "Content-Type": "application/json",
+      "Thread-Id": threadId,
+    },
+    body: JSON.stringify({ model, input: "post-compaction turn" }),
+  });
   try {
     await waitFor(`${routerBase(routerPort)}/models`, router);
     assert.equal((await send()).status, 200);
@@ -5781,6 +5812,42 @@ test("native picker selections stay native while subagents inherit the routed mo
     assert.equal(nativeRequests.length, 1);
     assert.equal(gatewayRequests.length, 1);
     assert.equal(gatewayRequests[0].model, "kimi-oauth-k3");
+
+    assert.equal((await compact("/responses/compact", "compact v1")).status, 200);
+    assert.equal(nativeRequests.length, 1);
+    assert.equal(gatewayRequests.length, 2);
+    assert.equal(gatewayRequests[1].model, "kimi-oauth-k3");
+
+    assert.equal((await compact(
+      "/responses/compact",
+      "native thread compact",
+      "22222222-2222-4222-8222-222222222222",
+    )).status, 200);
+    assert.equal(nativeRequests.length, 1);
+    assert.equal(gatewayRequests.at(-1).model, "kimi-oauth-k3");
+
+    assert.equal((await continuation(
+      "11111111-1111-4111-8111-111111111111",
+      "gpt-5.6-sol",
+    )).status, 200);
+    assert.equal(nativeRequests.length, 1);
+    assert.equal(gatewayRequests.at(-1).model, "kimi-oauth-k3");
+
+    assert.equal((await compact("/responses", [
+      { type: "message", role: "user", content: [{ type: "input_text", text: "keep" }] },
+      { type: "compaction_trigger" },
+    ])).status, 200);
+    assert.equal(nativeRequests.length, 1);
+    assert.equal(gatewayRequests.length, 5);
+    assert.equal(gatewayRequests[4].model, "kimi-oauth-k3");
+
+    assert.equal((await continuation("11111111-1111-4111-8111-111111111111")).status, 200);
+    assert.equal(nativeRequests.length, 1);
+    assert.equal(gatewayRequests.at(-1).model, "kimi-oauth-k3");
+
+    assert.equal((await continuation("22222222-2222-4222-8222-222222222222")).status, 200);
+    assert.equal(nativeRequests.length, 2);
+    assert.equal(nativeRequests.at(-1).model, "gpt-reserve");
   } finally {
     await stopChild(router);
     await Promise.all([closeServer(native.server), closeServer(gateway.server)]);
