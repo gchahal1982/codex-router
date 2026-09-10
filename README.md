@@ -109,7 +109,16 @@ different ChatGPT account in the browser. The equivalent CLI commands are:
 ./bin/codex-router chatgpt-accounts refresh chatgpt_ID
 ./bin/codex-router chatgpt-accounts login chatgpt_ID
 ./bin/codex-router chatgpt-accounts remove chatgpt_ID
+./bin/codex-router chatgpt-accounts reset-credit chatgpt_ID
 ```
+
+When a plan has a banked one-off reset available, `usage` reports it per account
+as `resetCredits.availableCount`, and the dense usage table in the menu-bar
+panel shows a bolt badge on that row. `reset-credit` spends one against that
+account's own login, and the panel badge is a deliberate click: nothing redeems
+a credit automatically. The command reports the server's outcome (`reset`,
+`noCredit`, `nothingToReset`, or `alreadyRedeemed`) rather than assuming the
+limit cleared.
 
 Do not run `codex logout` to switch subscriptions. A logout can revoke the
 refresh token backing the active profile. Use the account screen or the

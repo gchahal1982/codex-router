@@ -2,6 +2,7 @@ import {
   addChatGptAccount,
   chatGptAccountsSnapshot,
   chatGptAccountsUsage,
+  redeemChatGptAccountResetCredit,
   refreshChatGptAccount,
   reloginChatGptAccount,
   removeChatGptAccount,
@@ -31,10 +32,11 @@ function usage() {
     "       chatgpt-accounts order ACCOUNT_ID [ACCOUNT_ID...]",
     "       chatgpt-accounts purpose default|ACCOUNT_ID --purpose personal|auraone|veerone|foundation|reserve",
     "       chatgpt-accounts pause|resume|remove|refresh|login ACCOUNT_ID",
+    "       chatgpt-accounts reset-credit default|ACCOUNT_ID",
   ].join("\n");
 }
 
-if (!["list", "usage", "add", "rename", "prefer", "order", "purpose", "pause", "resume", "remove", "refresh", "login"].includes(command)) {
+if (!["list", "usage", "add", "rename", "prefer", "order", "purpose", "pause", "resume", "remove", "refresh", "login", "reset-credit"].includes(command)) {
   throw new Error(usage());
 }
 
@@ -59,6 +61,9 @@ if (command === "add") {
 } else if (command === "login") {
   if (!accountId) throw new Error(usage());
   result = { login: reloginChatGptAccount(accountId) };
+} else if (command === "reset-credit") {
+  if (!accountId) throw new Error(usage());
+  result = { resetCredit: await redeemChatGptAccountResetCredit(accountId) };
 } else if (command === "order") {
   result = setChatGptAccountOrder(args.slice(1));
 } else if (command === "purpose") {

@@ -45,6 +45,7 @@ test("normalizes Codex limits and daily usage without account credentials", () =
       windowDurationMins: 300,
       resetsAt: 1_700_000_000,
     },
+    resetCredits: { availableCount: 0, credits: [] },
     dailyUsageBuckets: [
       { startDate: "2026-07-19", tokens: 100 },
       { startDate: "2026-07-20", tokens: 200 },
@@ -159,4 +160,56 @@ test("the usage panel names a missing Codex instead of blaming the app-server", 
   // machine with Codex installed. It only looked green because CI runners have
   // none -- which is the one environment where this assertion cannot fail.
   await assert.rejects(readCodexAccountUsage({ binary: null }), /no Codex binary was found/);
+});
+
+test("surfaces redeemable banked resets without the credit balance", () => {
+  const value = normalizeCodexAccountUsage(
+    {
+      rateLimits: {
+        primary: { usedPercent: 100, windowDurationMins: 10_080 },
+        credits: { hasCredits: true, balance: "42.00-should-not-leak" },
+      },
+      rateLimitResetCredits: {
+        availableCount: 2,
+        credits: [
+          { id: "credit_a", status: "available", limitId: "codex" },
+          { id: "credit_b", status: "redeemed", limitId: "codex" },
+          "not-an-object",
+        ],
+      },
+    },
+    undefined,
+    new Date("2026-07-21T12:00:00.000Z"),
+  );
+
+  assert.deepEqual(value.resetCredits, {
+    availableCount: 2,
+    credits: [
+      { id: "credit_a", status: "available", limitId: "codex" },
+      { id: "credit_b", status: "redeemed", limitId: "codex" },
+    ],
+  });
+  assert.equal(JSON.stringify(value).includes("should-not-leak"), false);
+});
+
+test("counts available banked resets when the server omits the summary count", () => {
+  const value = normalizeCodexAccountUsage(
+    {
+      rateLimitResetCredits: {
+        credits: [
+          { id: "credit_a", status: "available" },
+          { id: "credit_b", status: "available" },
+          { id: "credit_c", status: "redeeming" },
+        ],
+      },
+    },
+    undefined,
+    new Date("2026-07-21T12:00:00.000Z"),
+  );
+  assert.equal(value.resetCredits.availableCount, 2);
+});
+
+test("reports no banked resets when the account has none", () => {
+  const value = normalizeCodexAccountUsage({ rateLimits: {} }, undefined, new Date());
+  assert.deepEqual(value.resetCredits, { availableCount: 0, credits: [] });
 });

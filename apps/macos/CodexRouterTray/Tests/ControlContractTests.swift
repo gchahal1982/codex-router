@@ -47,6 +47,12 @@ struct ControlContractTests {
       RouterControlContractPolicy.access(for: ["chatgpt-accounts", "resume", "chatgpt_abcdefghijklmnop"])
         == .runtime
     )
+    // Redeeming a banked reset changes account state at runtime; it must not be
+    // gated behind install-compatibility like a configuration mutation.
+    #expect(
+      RouterControlContractPolicy.access(for: ["chatgpt-accounts", "reset-credit", "default"])
+        == .runtime
+    )
     #expect(RouterControlContractPolicy.access(for: ["providers", "--json"]) == .read)
     #expect(
       RouterControlContractPolicy.access(for: ["local-models", "list", "--json"]) == .read

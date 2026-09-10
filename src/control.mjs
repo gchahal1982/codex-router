@@ -834,6 +834,12 @@ async function handleChatGptAccounts(command = "list", accountId) {
   } else if (command === "usage") {
     process.stdout.write(`${JSON.stringify(await accounts.chatGptAccountsUsage({ cached: args.includes("--cached") }))}\n`);
     return;
+  } else if (command === "reset-credit") {
+    if (!accountId) throw new Error("A ChatGPT account id is required.");
+    process.stdout.write(
+      `${JSON.stringify(await accounts.redeemChatGptAccountResetCredit(accountId))}\n`,
+    );
+    return;
   } else if (command !== "list") {
     throw new Error("Unknown ChatGPT account command.");
   }

@@ -54,7 +54,7 @@ enum RouterControlContractPolicy {
     }
     if arguments.first == "chatgpt-accounts",
       let command = arguments.dropFirst().first,
-      ["pause", "resume", "prefer", "purpose"].contains(command)
+      ["pause", "resume", "prefer", "purpose", "reset-credit"].contains(command)
     {
       return .runtime
     }
@@ -679,6 +679,7 @@ final class RouterStore: ObservableObject {
   @Published private(set) var accountUsage: CodexAccountUsage?
   @Published private(set) var accountUsageError: String?
   @Published private(set) var chatGptAccountUsage: ChatGptAccountsUsageSnapshot?
+  @Published private(set) var redeemingResetCreditAccountId: String?
   @Published private(set) var providerUsage: ProviderUsageSnapshot?
   @Published private(set) var providerUsageError: String?
   @Published private(set) var providerSetup: [String: ProviderSetupState] = [:]
@@ -1902,7 +1903,8 @@ final class RouterStore: ObservableObject {
             preferred: row.id == nextPreferred,
             purpose: row.purpose,
             health: row.health,
-            using: row.id == nextUsing
+            using: row.id == nextUsing,
+            resetCredits: row.resetCredits
           )
         },
         preferred: nextPreferred,
@@ -1941,7 +1943,8 @@ final class RouterStore: ObservableObject {
             preferred: row.id == accountId,
             purpose: row.purpose,
             health: row.health,
-            using: row.using
+            using: row.using,
+            resetCredits: row.resetCredits
           )
         },
         preferred: accountId,
@@ -1953,6 +1956,44 @@ final class RouterStore: ObservableObject {
       )
     } catch {
       message = error.localizedDescription
+    }
+  }
+
+  // A banked reset is a one-way spend, so the panel never redeems on its own:
+  // the row's badge is the deliberate click. Report the server's outcome
+  // verbatim instead of assuming the limit cleared, then re-read usage so the
+  // freed quota replaces the badge.
+  func redeemChatGptResetCredit(_ accountId: String) async {
+    guard
+      let current = chatGptAccountUsage,
+      let account = current.accounts.first(where: { $0.id == accountId }),
+      account.canRedeemBankedReset,
+      redeemingResetCreditAccountId == nil
+    else { return }
+    redeemingResetCreditAccountId = accountId
+    defer { redeemingResetCreditAccountId = nil }
+    do {
+      let output = try await runControl(arguments: ["chatgpt-accounts", "reset-credit", accountId])
+      let result = try JSONDecoder().decode(ChatGptResetCreditResult.self, from: output)
+      message = result.redeemed == true
+        ? String(format: routerLocalized("Used a banked reset on %@."), result.label ?? account.label)
+        : Self.resetCreditFailureMessage(result.outcome, label: result.label ?? account.label)
+      await refreshChatGptAccountUsage()
+    } catch {
+      message = error.localizedDescription
+    }
+  }
+
+  nonisolated static func resetCreditFailureMessage(_ outcome: String?, label: String) -> String {
+    switch outcome {
+    case "noCredit":
+      return String(format: routerLocalized("%@ has no banked reset left to use."), label)
+    case "nothingToReset":
+      return String(format: routerLocalized("%@ is not rate limited, so no reset was used."), label)
+    case "alreadyRedeemed":
+      return String(format: routerLocalized("That banked reset was already used on %@."), label)
+    default:
+      return String(format: routerLocalized("The banked reset for %@ could not be used."), label)
     }
   }
 
@@ -4066,6 +4107,17 @@ struct ChatGptAccountQuotaWindow: Decodable, Equatable {
   let resetsAt: TimeInterval?
 }
 
+struct ChatGptAccountResetCredits: Decodable, Equatable {
+  let availableCount: Int
+}
+
+struct ChatGptResetCreditResult: Decodable, Equatable {
+  let accountId: String?
+  let label: String?
+  let redeemed: Bool?
+  let outcome: String?
+}
+
 struct ChatGptAccountUsageRow: Decodable, Identifiable, Equatable {
   let id: String
   let label: String
@@ -4079,6 +4131,10 @@ struct ChatGptAccountUsageRow: Decodable, Identifiable, Equatable {
   let purpose: String?
   let health: String?
   let using: Bool?
+  let resetCredits: ChatGptAccountResetCredits?
+
+  var bankedResetCount: Int { max(0, resetCredits?.availableCount ?? 0) }
+  var canRedeemBankedReset: Bool { bankedResetCount > 0 && session != "expired" }
 
   init(
     id: String,
@@ -4092,7 +4148,8 @@ struct ChatGptAccountUsageRow: Decodable, Identifiable, Equatable {
     preferred: Bool?,
     purpose: String? = nil,
     health: String? = nil,
-    using: Bool? = nil
+    using: Bool? = nil,
+    resetCredits: ChatGptAccountResetCredits? = nil
   ) {
     self.id = id
     self.label = label
@@ -4106,6 +4163,7 @@ struct ChatGptAccountUsageRow: Decodable, Identifiable, Equatable {
     self.purpose = purpose
     self.health = health
     self.using = using
+    self.resetCredits = resetCredits
   }
 }
 

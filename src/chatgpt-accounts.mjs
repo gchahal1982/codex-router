@@ -21,7 +21,11 @@ import { spawnableCommand } from "./spawnable-command.mjs";
 import { classifyProviderAccountResponse } from "./provider-accounts.mjs";
 import { isRetryableStatus } from "./upstream-retry.mjs";
 import { discoveryDisabled } from "./discovery-mode.mjs";
-import { classifyCodexQuotaWindows, readCodexAccountUsage } from "./codex-account-usage.mjs";
+import {
+  classifyCodexQuotaWindows,
+  consumeCodexRateLimitResetCredit,
+  readCodexAccountUsage,
+} from "./codex-account-usage.mjs";
 import {
   CHATGPT_ACCOUNTS_DIR,
   CHATGPT_ACCOUNT_AFFINITY_PATH,
@@ -762,6 +766,14 @@ function windowLeftover(window) {
   };
 }
 
+// Banked resets survive a router restart, so the dense leftover cache carries
+// the redeemable count. The credit ids are per-read and are not cached.
+function resetCreditsLeftover(resetCredits) {
+  const count = Number(resetCredits?.availableCount);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  return { availableCount: Math.trunc(count) };
+}
+
 export function chatGptAccountIsDrained(row) {
   return planeIsDrained(row);
 }
@@ -851,6 +863,7 @@ function persistUsageCache(snapshot) {
       weekly: windowLeftover(entry.weekly),
       planType: entry.planType ?? null,
       session: entry.session,
+      resetCredits: resetCreditsLeftover(entry.resetCredits),
       error: entry.error,
     })),
   });
@@ -1083,6 +1096,7 @@ export async function chatGptAccountsUsage({
         session: entry.session,
         planType: usage.planType ?? null,
         ...classifyCodexQuotaWindows(usage),
+        resetCredits: usage.resetCredits ?? null,
         fetchedAt: usage.fetchedAt,
       });
     } catch (error) {
@@ -1111,6 +1125,46 @@ export async function chatGptAccountsUsage({
     // Selection still works without a leftover cache.
   }
   return result;
+}
+
+// A banked reset clears the account's own rate limit, so it has to be redeemed
+// against that account's CODEX_HOME rather than whichever login the shell
+// happens to hold. Redeeming is one-way: the caller decides which account
+// spends a credit, and the leftover cache is refreshed so the freed quota shows
+// up in routing immediately instead of at the next 30-second poll.
+export async function redeemChatGptAccountResetCredit(accountId, {
+  consume = consumeCodexRateLimitResetCredit,
+  timeoutMs = 20_000,
+  refresh = true,
+} = {}) {
+  assertDiscoveryEnabled();
+  if (!isListedAccountId(accountId)) throw new Error("Invalid ChatGPT account id.");
+  const snapshot = chatGptAccountsSnapshot();
+  const entry = snapshot.accounts.find((candidate) => candidate.id === accountId);
+  if (!entry) throw new Error("ChatGPT account was not found.");
+  if (entry.session !== "usable") {
+    throw new Error("This login cannot redeem a banked reset until it is signed in again.");
+  }
+  const result = await consume({
+    codexHome: usageHomeForAccount(accountId),
+    timeoutMs,
+  });
+  const redeemed = result?.outcome === "reset";
+  let usage;
+  if (redeemed && refresh) {
+    try {
+      usage = await chatGptAccountsUsage();
+    } catch {
+      // The redeem already succeeded; a failed re-probe only delays the panel.
+    }
+  }
+  return {
+    accountId,
+    label: entry.label,
+    redeemed,
+    outcome: result?.outcome ?? "unknown",
+    ...(usage ? { usage } : {}),
+  };
 }
 
 let leftoverProbe;

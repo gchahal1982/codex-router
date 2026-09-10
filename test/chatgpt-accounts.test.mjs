@@ -32,6 +32,7 @@ const {
   renameChatGptAccount,
   chatGptAccountIsDrained,
   orderChatGptAccountCandidates,
+  redeemChatGptAccountResetCredit,
   selectChatGptAccountCandidates,
   setChatGptAccountOrder,
   setChatGptAccountPurpose,
@@ -499,4 +500,72 @@ test("native ChatGPT turns fall back before relay and remain on the working subs
   const second = await call();
   assert.equal(second.status, 200, `${await second.text()}\n${errors}`);
   assert.deepEqual(seen.at(-1), { authorization: "Bearer backup-router-token", account: backupAccount });
+});
+
+test("a banked reset is redeemed against the account's own Codex home", async () => {
+  setChatGptAccountState(backupId, "active");
+  const seen = [];
+  const result = await redeemChatGptAccountResetCredit(backupId, {
+    refresh: false,
+    consume: async ({ codexHome: home }) => {
+      seen.push(home);
+      return { outcome: "reset", idempotencyKey: "key-1" };
+    },
+  });
+  assert.deepEqual(seen, [path.join(accountsDir, backupId)]);
+  assert.equal(result.redeemed, true);
+  assert.equal(result.outcome, "reset");
+  assert.equal(result.accountId, backupId);
+});
+
+test("redeeming reports the server outcome instead of assuming the limit cleared", async () => {
+  for (const outcome of ["noCredit", "nothingToReset", "alreadyRedeemed"]) {
+    const result = await redeemChatGptAccountResetCredit("default", {
+      refresh: false,
+      consume: async () => ({ outcome }),
+    });
+    assert.equal(result.redeemed, false);
+    assert.equal(result.outcome, outcome);
+  }
+});
+
+test("redeeming a banked reset rejects unknown accounts", async () => {
+  await assert.rejects(
+    () => redeemChatGptAccountResetCredit("chatgpt_missingaccountid00000000", {
+      refresh: false,
+      consume: async () => ({ outcome: "reset" }),
+    }),
+    /was not found/,
+  );
+  await assert.rejects(
+    () => redeemChatGptAccountResetCredit("not-an-account", {
+      refresh: false,
+      consume: async () => ({ outcome: "reset" }),
+    }),
+    /Invalid ChatGPT account id/,
+  );
+});
+
+test("the leftover cache carries redeemable banked resets for the panel", async () => {
+  const usage = await chatGptAccountsUsage({
+    readUsage: async ({ codexHome: home }) => ({
+      fetchedAt: "2026-09-06T00:00:00.000Z",
+      planType: "pro",
+      primary: { usedPercent: 100, remainingPercent: 0, windowDurationMins: 10_080, resetsAt: 2 },
+      secondary: { usedPercent: 100, remainingPercent: 0, windowDurationMins: 300, resetsAt: 1 },
+      resetCredits:
+        home === codexHome
+          ? { availableCount: 2, credits: [{ id: "credit_a", status: "available", limitId: "codex" }] }
+          : { availableCount: 0, credits: [] },
+    }),
+  });
+  assert.equal(usage.accounts.find((entry) => entry.id === "default")?.resetCredits?.availableCount, 2);
+  const cached = JSON.parse(readFileSync(path.join(stateDir, "chatgpt-account-usage.json"), "utf8"));
+  assert.deepEqual(
+    cached.accounts.find((entry) => entry.id === "default")?.resetCredits,
+    { availableCount: 2 },
+  );
+  assert.equal(cached.accounts.find((entry) => entry.id === backupId)?.resetCredits, null);
+  // Per-read credit ids are not durable state; only the count is cached.
+  assert.equal(JSON.stringify(cached).includes("credit_a"), false);
 });

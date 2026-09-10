@@ -882,6 +882,7 @@ enum IslandAccountQuotaPresentation {
   static let toggleHitWidth: CGFloat = 22
   static let toggleHeight: CGFloat = 9
   static let headerHeight: CGFloat = 16
+  static let bankedResetWidth: CGFloat = 20
 
   nonisolated static func percentText(_ remaining: Double?) -> String {
     guard let remaining, remaining.isFinite else { return "—" }
@@ -1146,6 +1147,10 @@ private struct IslandAccountQuotaTable: View {
             .frame(width: 36, alignment: .trailing)
           Text("Wk")
             .frame(width: 32, alignment: .trailing)
+          if showsBankedResets {
+            Color.clear
+              .frame(width: IslandAccountQuotaPresentation.bankedResetWidth)
+          }
         }
         .font(.system(size: 8, weight: .semibold, design: .monospaced))
         .foregroundStyle(routerMuted)
@@ -1213,6 +1218,10 @@ private struct IslandAccountQuotaTable: View {
                   ? ""
                   : routerLocalized("Double-click to prefer this subscription")
               )
+
+              if showsBankedResets {
+                bankedResetControl(for: account)
+              }
             }
             .frame(height: IslandAccountQuotaPresentation.rowHeight)
           }
@@ -1226,6 +1235,57 @@ private struct IslandAccountQuotaTable: View {
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel(routerLocalized("All usage"))
+  }
+
+  // Most logins never have a banked reset, so the column stays hidden until one
+  // is actually redeemable and the dense row keeps its current width.
+  private var showsBankedResets: Bool {
+    (store.chatGptAccountUsage?.accounts ?? []).contains { $0.bankedResetCount > 0 }
+  }
+
+  // Spending a banked reset costs a real credit, so this is a click and never a
+  // side effect of a hover, a poll, or picking the account.
+  @ViewBuilder
+  private func bankedResetControl(for account: ChatGptAccountUsageRow) -> some View {
+    let count = account.bankedResetCount
+    let busy = store.redeemingResetCreditAccountId == account.id
+    if count > 0 {
+      Button {
+        Task { await store.redeemChatGptResetCredit(account.id) }
+      } label: {
+        ZStack {
+          RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .fill(routerAccent.opacity(busy ? 0.18 : 0.32))
+          if busy {
+            Image(systemName: "hourglass")
+              .font(.system(size: 8, weight: .bold))
+              .foregroundStyle(.white.opacity(0.9))
+          } else {
+            HStack(spacing: 1) {
+              Image(systemName: "bolt.fill")
+                .font(.system(size: 7, weight: .bold))
+              if count > 1 {
+                Text("\(count)")
+                  .font(.system(size: 8, weight: .bold, design: .rounded))
+                  .monospacedDigit()
+              }
+            }
+            .foregroundStyle(.white.opacity(0.95))
+          }
+        }
+        .frame(width: IslandAccountQuotaPresentation.bankedResetWidth, height: 12)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .disabled(busy || !account.canRedeemBankedReset || store.redeemingResetCreditAccountId != nil)
+      .help(String(format: routerLocalized("Use a banked reset on %@ now"), account.label))
+      .accessibilityLabel(
+        String(format: routerLocalized("Use a banked reset on %@"), account.label)
+      )
+    } else {
+      Color.clear
+        .frame(width: IslandAccountQuotaPresentation.bankedResetWidth, height: 12)
+    }
   }
 
   private func quotaValue(_ remaining: Double?, width: CGFloat) -> some View {
@@ -1259,7 +1319,9 @@ private struct IslandAccountQuotaTable: View {
     let fiveHour = IslandAccountQuotaPresentation.percentText(account.fiveHour?.remainingPercent)
     let weekly = IslandAccountQuotaPresentation.percentText(account.weekly?.remainingPercent)
     let back = IslandAccountQuotaPresentation.fiveHourBackText(account.fiveHour?.resetsAt, now: now)
-    return "\(account.label), 5-hour \(fiveHour), back \(back), weekly \(weekly)"
+    let base = "\(account.label), 5-hour \(fiveHour), back \(back), weekly \(weekly)"
+    guard account.bankedResetCount > 0 else { return base }
+    return "\(base), \(account.bankedResetCount) banked reset available"
   }
 }
 
