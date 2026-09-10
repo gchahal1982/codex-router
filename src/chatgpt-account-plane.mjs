@@ -79,14 +79,25 @@ export function orderChatGptAccountCandidates(candidates, {
   purposeById,
   pinOrder = DEFAULT_PIN_ORDER,
   softDrainPercent = SOFT_DRAIN_PERCENT,
+  reserveById,
 } = {}) {
   const leftover = leftoverById instanceof Map ? leftoverById : new Map(Object.entries(leftoverById || {}));
   const purposes = purposeById instanceof Map ? purposeById : new Map(Object.entries(purposeById || {}));
+  const reserve = reserveById instanceof Map ? reserveById : new Map(Object.entries(reserveById || {}));
   const orderIndex = new Map((order || []).map((id, index) => [id, index]));
   const pinIndex = new Map((pinOrder || DEFAULT_PIN_ORDER).map((purpose, index) => [purpose, index]));
+  // A spent Codex quota is not the end of an account's usefulness when it also
+  // carries the Luna reserve: that is a separate allowance on the same
+  // subscription, so such an account outranks one that is drained outright.
+  // It still sorts behind any account with ordinary quota left, because
+  // spending the reserve is a fallback rather than a first choice.
+  const hasReserve = (id) => {
+    const row = reserve.get(id);
+    return Boolean(row?.present && row?.allowed);
+  };
   const leftoverRank = (id) => {
     const health = leftoverHealth(leftover.get(id), softDrainPercent);
-    if (health === "drained") return 3;
+    if (health === "drained") return hasReserve(id) ? 3 : 4;
     if (health === "soft") return 2;
     return 1;
   };
@@ -100,8 +111,12 @@ export function orderChatGptAccountCandidates(candidates, {
       if (quota === 1) return 2;
       if (quota === 2 && home) return 3;
       if (quota === 2) return 4;
-      if (home) return 5;
-      return 6;
+      // Drained on Codex quota but holding a live Luna reserve. Ahead of a fully
+      // drained account, behind everything that still has ordinary quota.
+      if (quota === 3 && home) return 5;
+      if (quota === 3) return 6;
+      if (home) return 7;
+      return 8;
     };
     const delta = rank(left) - rank(right);
     if (delta !== 0) return delta;

@@ -233,6 +233,7 @@ async function emitProbe() {
   const { modelSyncSnapshot } = await import("./model-sync.mjs");
   const { readFailoverSettings: readFailoverForSnapshot } =
     await import("./model-failover.mjs");
+  const reserveModule = await import("./chatgpt-reserve.mjs");
   const usageEvents = TARGET === "codex"
     ? (await import("./usage-events.mjs")).recentUsageEvents()
     : [];
@@ -321,6 +322,20 @@ async function emitProbe() {
             modelSettings: {
               modelSync: modelSyncSnapshot(),
               failover: readFailoverForSnapshot(),
+              chatgptReserve: (() => {
+                const { readReserveSettings: read } = reserveModule;
+                const settings = read();
+                const cached = reserveModule.reserveByIdFromCache();
+                return {
+                  ...settings,
+                  // Availability comes from the cache, never a live probe:
+                  // painting a settings page must not spend six authenticated
+                  // round trips against chatgpt.com.
+                  available: [...cached]
+                    .filter(([, row]) => row?.present && row?.allowed)
+                    .map(([id]) => id),
+                };
+              })(),
               subagents: subagentSettings,
               picker: modelPickerSnapshot(),
               toolResultAging: toolResultAgingSnapshot(),
@@ -845,10 +860,79 @@ async function handleChatGptAccounts(command = "list", accountId) {
       `${JSON.stringify(await accounts.redeemChatGptAccountResetCredit(accountId))}\n`,
     );
     return;
+  } else if (command === "reserve") {
+    await handleChatGptReserve(accountId);
+    return;
   } else if (command !== "list") {
     throw new Error("Unknown ChatGPT account command.");
   }
   process.stdout.write(`${JSON.stringify({ ...result, accounts: accounts.chatGptAccountsSnapshot() })}\n`);
+}
+
+// Which logins actually carry the Luna reserve, and the depth to run it at.
+// Discovery is a live authenticated read per account, so it is an explicit
+// command rather than something the status path does on its own.
+async function handleChatGptReserve(subcommand) {
+  const reserve = await import("./chatgpt-reserve.mjs");
+  const accounts = await import("./chatgpt-accounts.mjs");
+  const action = subcommand || "status";
+  if (action === "discover") {
+    const snapshot = accounts.chatGptAccountsSnapshot();
+    const labelById = new Map(snapshot.accounts.map((entry) => [entry.id, entry.label]));
+    const found = await reserve.discoverReserveAccounts({
+      accountIds: snapshot.accounts.map((entry) => entry.id),
+      labelById,
+    });
+    reserve.persistReserveCache(found);
+    process.stdout.write(`${JSON.stringify(found, null, 2)}\n`);
+    return;
+  }
+  if (action === "status") {
+    process.stdout.write(`${JSON.stringify({
+      settings: reserve.readReserveSettings(),
+      cached: Object.fromEntries(reserve.reserveByIdFromCache()),
+    }, null, 2)}\n`);
+    return;
+  }
+  if (action === "on" || action === "off") {
+    process.stdout.write(`${JSON.stringify(reserve.setReserveSettings({ enabled: action === "on" }), null, 2)}\n`);
+    return;
+  }
+  if (action === "effort" || action === "cron-effort") {
+    const level = args[args.indexOf(action) + 1];
+    if (!level) throw new Error(`Usage: control chatgpt-accounts reserve ${action} EFFORT`);
+    process.stdout.write(`${JSON.stringify(
+      reserve.setReserveSettings(action === "effort" ? { effort: level } : { cronEffort: level }),
+      null,
+      2,
+    )}\n`);
+    return;
+  }
+  if (action === "accounts") {
+    const list = args.slice(args.indexOf("accounts") + 1);
+    process.stdout.write(`${JSON.stringify(reserve.setReserveSettings({ accounts: list }), null, 2)}\n`);
+    return;
+  }
+  if (action === "use-discovered") {
+    // The eligible set from the last discovery, so the operator does not have
+    // to retype six account ids to adopt what the probe just found.
+    const eligible = [...reserve.reserveByIdFromCache()]
+      .filter(([, row]) => row?.present && row?.allowed)
+      .map(([id]) => id);
+    if (!eligible.length) {
+      throw new Error("No reserve accounts are cached. Run: control chatgpt-accounts reserve discover");
+    }
+    process.stdout.write(`${JSON.stringify(
+      reserve.setReserveSettings({ accounts: eligible, enabled: true }),
+      null,
+      2,
+    )}\n`);
+    return;
+  }
+  throw new Error(
+    "Usage: control chatgpt-accounts reserve " +
+      "<status|discover|use-discovered|on|off|effort EFFORT|cron-effort EFFORT|accounts ID...>",
+  );
 }
 
 async function setLoginFreeMode(desired) {

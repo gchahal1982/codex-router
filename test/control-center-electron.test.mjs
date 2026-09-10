@@ -1126,6 +1126,11 @@ test("settings exposes explicit chat and scheduled-task model defaults", async (
   // The takeover exists because the ChatGPT plan is empty, so a native model
   // must never be offered as its destination.
   assert.match(settings, /!model\.native/);
+  assert.match(settings, /settings\.reserve\.title/);
+  assert.match(settings, /setChatGptReserveEnabled\(/);
+  assert.match(settings, /setChatGptReserveEffort\(/);
+  assert.match(settings, /discoverChatGptReserve\(/);
+  assert.match(settings, /useDiscoveredChatGptReserve\(/);
   assert.match(settings, /settings\.language\.title/);
   assert.match(settings, /settings\.context\.enable\.title/);
   assert.match(settings, /settings\.vision\.title/);

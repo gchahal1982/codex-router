@@ -1003,8 +1003,41 @@ The full order is three stages, and only the last one is configured here:
    this by itself; the router relays those turns untouched so a second budget on
    a subscription you already pay for is never skipped for a routed model. It is
    deliberately not a selectable setting, and an escalation never pins a thread.
-3. **The takeover model** below, once the reserve is spent too and ChatGPT
-   returns a real usage failure.
+3. **Other accounts that still hold a reserve allowance**, if reserve rotation is
+   on. See below.
+4. **The takeover model**, once every ChatGPT allowance is spent and the
+   subscription returns a real usage failure.
+
+#### Rotate to accounts that still hold a Luna reserve
+
+Only some logins carry the reserve allowance, and plan type does not predict it.
+Codex's own quota surface does not report it either: an account with a live
+reserve looks identical there to one without. It appears only on the usage
+endpoint that drives the app's own banner, under `additional_rate_limits`.
+
+Measured across the accounts on this machine, an account carries the allowance
+exactly when it has a `base_model_inference` limit bucket, and the entry names
+`gpt-5.6-luna` as the model it meters. Accounts that only ever ran Codex report
+no additional limits and have no reserve to spend.
+
+Scan once to find out which of yours qualify, then adopt what the scan found:
+
+```sh
+./bin/control chatgpt-accounts reserve discover
+./bin/control chatgpt-accounts reserve use-discovered
+./bin/control chatgpt-accounts reserve effort medium
+./bin/control chatgpt-accounts reserve cron-effort low
+./bin/control chatgpt-accounts reserve accounts ID ID   # choose them yourself
+./bin/control chatgpt-accounts reserve off
+```
+
+Turns served from a reserve run at `medium` unless you choose otherwise, and
+scheduled tasks can run at their own depth. Rotation only prefers a reserve
+account once the better-ranked accounts have spent their ordinary quota: an
+account with real quota left always goes first, because spending a reserve is a
+fallback rather than a preference. Availability is read from a short-lived cache,
+so routing never blocks on a probe, and an allowance that cannot be measured is
+treated as absent rather than assumed.
 
 ```sh
 ./bin/control failover takeover kiro-prism/gpt-5.6-sol

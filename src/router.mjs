@@ -73,6 +73,7 @@ import { readNativeAliases } from "./native-alias.mjs";
 import { nativeContextVariantBase } from "./native-context-variants.mjs";
 import { readNativeRedirect } from "./native-redirect.mjs";
 import { isAutomationThread, startModelSyncWatcher, synchronizedPayload } from "./model-sync.mjs";
+import { readReserveSettings, reserveByIdFromCache } from "./chatgpt-reserve.mjs";
 import {
   followOperatorModel,
   isNativeOpenAIRoute,
@@ -647,6 +648,27 @@ function nativeAccountCandidates(request) {
   const headers = callerNativeHeaders(request);
   const candidates = selectChatGptAccountCandidates(headers, routedConversationId(request));
   return candidates.length ? candidates : [{ id: "default", headers }];
+}
+
+// The reasoning depth for a turn that is about to spend an account's Luna
+// reserve. Returns undefined for every ordinary turn, so the native path is
+// byte-identical to Codex's own request unless this feature is on and this
+// account is one the operator listed.
+function reserveEffortForAccount(accountId, { automation = false } = {}) {
+  if (!accountId) return undefined;
+  let settings;
+  try {
+    settings = readReserveSettings();
+  } catch {
+    return undefined;
+  }
+  if (!settings.enabled || !settings.accounts.includes(accountId)) return undefined;
+  const cached = reserveByIdFromCache();
+  const row = cached.get(accountId);
+  // Only when the allowance is measured as live. An unmeasured reserve must not
+  // silently change the depth of a turn on ordinary quota.
+  if (!row?.present || !row?.allowed) return undefined;
+  return (automation && settings.cronEffort) || settings.effort || undefined;
 }
 
 function chatgptUsageFields(accountId) {
@@ -3543,6 +3565,18 @@ async function handleResponses(request, response, requestUrl) {
       chatGptCandidates = nativeAccountCandidates(request);
       selectedChatGptAccount = chatGptCandidates[0];
       headers = selectedChatGptAccount.headers;
+      // Rotation put a Luna-reserve account first, which happens only once the
+      // ordinary Codex quota on the better-ranked accounts is spent. Turns served
+      // from that allowance run at the operator's chosen depth: the body is
+      // materialized once here so every retry replays identical bytes, so the
+      // level is decided with the account that leads the order rather than
+      // rebuilt per hop.
+      const reserveEffort = reserveEffortForAccount(selectedChatGptAccount?.id, {
+        automation: isAutomationThread(threadIdFromHeaders(request.headers)),
+      });
+      if (reserveEffort) {
+        native.reasoning = { ...(native.reasoning || {}), effort: reserveEffort };
+      }
       routedBody = await compressedNativeBody(
         Buffer.from(JSON.stringify(native), "utf8"),
         headers,

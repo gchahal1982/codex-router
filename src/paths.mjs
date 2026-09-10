@@ -171,6 +171,12 @@ export const CHATGPT_ACCOUNT_POLICY_PATH =
 export const CHATGPT_ACCOUNT_USAGE_CACHE_PATH =
   process.env.MODEL_ROUTER_CHATGPT_ACCOUNT_USAGE_CACHE ||
   path.join(STATE_DIR, "chatgpt-account-usage.json");
+export const CHATGPT_RESERVE_STATE_PATH =
+  process.env.MODEL_ROUTER_CHATGPT_RESERVE_STATE ||
+  path.join(STATE_DIR, "chatgpt-reserve.json");
+export const CHATGPT_RESERVE_CACHE_PATH =
+  process.env.MODEL_ROUTER_CHATGPT_RESERVE_CACHE ||
+  path.join(STATE_DIR, "chatgpt-reserve-cache.json");
 export const CHATGPT_ACCOUNT_AFFINITY_PATH =
   process.env.MODEL_ROUTER_CHATGPT_ACCOUNT_AFFINITY ||
   path.join(STATE_DIR, "chatgpt-account-affinities.json");

@@ -246,6 +246,13 @@ export interface RouterTarget {
       pinnedThreadCount?: number;
       path?: string;
     };
+    chatgptReserve?: {
+      enabled: boolean;
+      effort: string;
+      cronEffort?: string;
+      accounts: string[];
+      available: string[];
+    };
     failover?: {
       enabled: boolean;
       chain: string[];
@@ -787,6 +794,11 @@ export interface RouterControlApi {
   setNativeTakeoverModel(slug: string): Promise<unknown>;
   setNativeTakeoverEffort(effort: string): Promise<unknown>;
   setNativeTakeoverCronEffort(effort: string): Promise<unknown>;
+  setChatGptReserveEnabled(enabled: boolean): Promise<unknown>;
+  setChatGptReserveEffort(effort: string): Promise<unknown>;
+  setChatGptReserveCronEffort(effort: string): Promise<unknown>;
+  discoverChatGptReserve(): Promise<unknown>;
+  useDiscoveredChatGptReserve(): Promise<unknown>;
   setChatGptSessionSharing(enabled: boolean): Promise<ChatGptSessionStatus>;
   setPresence(mode: "always" | "follow-codex"): Promise<PresenceSnapshot>;
   controlService(action: "status" | "start"): Promise<unknown>;

@@ -138,6 +138,11 @@ export interface RouterControl {
   setNativeTakeoverModel(slug: string): Promise<unknown>;
   setNativeTakeoverEffort(effort: string): Promise<unknown>;
   setNativeTakeoverCronEffort(effort: string): Promise<unknown>;
+  setChatGptReserveEnabled(enabled: boolean): Promise<unknown>;
+  setChatGptReserveEffort(effort: string): Promise<unknown>;
+  setChatGptReserveCronEffort(effort: string): Promise<unknown>;
+  discoverChatGptReserve(): Promise<unknown>;
+  useDiscoveredChatGptReserve(): Promise<unknown>;
   setChatGptSessionSharing(enabled: boolean): Promise<ChatGptSessionStatus>;
   setPresence(mode: PresenceMode): Promise<unknown>;
   controlService(action: ServiceAction): Promise<unknown>;

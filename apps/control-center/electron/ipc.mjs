@@ -1167,6 +1167,31 @@ export function registerIpcHandlers({
     await runControl(["failover", "takeover", "cron-effort", effort], { timeoutMs: 60_000 });
     return snapshot();
   });
+  handleAction("setChatGptReserveEnabled", async ({ enabled } = {}) => {
+    if (typeof enabled !== "boolean") throw new Error("enabled must be boolean.");
+    await runControl(["chatgpt-accounts", "reserve", enabled ? "on" : "off"], { timeoutMs: 60_000 });
+    return snapshot();
+  });
+  handleAction("setChatGptReserveEffort", async ({ effort } = {}) => {
+    oneOf(effort, DEFAULT_EFFORTS, "Reserve reasoning effort");
+    await runControl(["chatgpt-accounts", "reserve", "effort", effort], { timeoutMs: 60_000 });
+    return snapshot();
+  });
+  handleAction("setChatGptReserveCronEffort", async ({ effort } = {}) => {
+    oneOf(effort, DEFAULT_EFFORTS, "Reserve reasoning effort");
+    await runControl(["chatgpt-accounts", "reserve", "cron-effort", effort], { timeoutMs: 60_000 });
+    return snapshot();
+  });
+  // Discovery is a live authenticated read per account, so it stays an explicit
+  // operator action and gets the longer timeout six sequential probes need.
+  handleAction("discoverChatGptReserve", async () => {
+    await runControl(["chatgpt-accounts", "reserve", "discover"], { timeoutMs: 120_000 });
+    return snapshot();
+  });
+  handleAction("useDiscoveredChatGptReserve", async () => {
+    await runControl(["chatgpt-accounts", "reserve", "use-discovered"], { timeoutMs: 60_000 });
+    return snapshot();
+  });
   handleAction("setChatGptSessionSharing", async ({ enabled } = {}) => {
     if (typeof enabled !== "boolean") throw new Error("enabled must be boolean.");
     // Renderer input selects one of two fixed control verbs. The upstream

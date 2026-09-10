@@ -50,6 +50,7 @@ import {
   pickChatGptAccount,
   reserveResumeDecisions,
 } from "./chatgpt-account-plane.mjs";
+import { readReserveSettings, reserveByIdFromCache } from "./chatgpt-reserve.mjs";
 
 export const DEFAULT_CHATGPT_ACCOUNT_ID = "default";
 export const DEFAULT_CHATGPT_ACCOUNT_LABEL = "Current Codex login";
@@ -331,7 +332,7 @@ function purposeByIdFromPolicy(policy) {
   return purposes;
 }
 
-function selectionOptions(policy, leftoverById) {
+function selectionOptions(policy, leftoverById, reserveById) {
   const rules = normalizeRules(policy.rules);
   return {
     preferred: policy.preferred,
@@ -340,7 +341,29 @@ function selectionOptions(policy, leftoverById) {
     purposeById: purposeByIdFromPolicy(policy),
     pinOrder: rules.pinOrder,
     softDrainPercent: rules.softDrainPercent,
+    ...(reserveById ? { reserveById } : {}),
   };
+}
+
+// Reserve availability only steers rotation once the operator turned it on and
+// named the accounts. Reading a cache keeps this off the request path: a stale or
+// missing entry simply stops influencing the order rather than blocking a turn
+// on six authenticated probes.
+function reserveSelectionById(now) {
+  try {
+    const settings = readReserveSettings();
+    if (!settings.enabled || !settings.accounts.length) return undefined;
+    const cached = reserveByIdFromCache(now);
+    if (!cached.size) return undefined;
+    const allowed = new Map();
+    for (const id of settings.accounts) {
+      const row = cached.get(id);
+      if (row?.present && row?.allowed) allowed.set(id, row);
+    }
+    return allowed.size ? allowed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function publicAccount(entry, preferred) {
@@ -1009,7 +1032,7 @@ export function selectChatGptAccountCandidates(callerHeaders, conversationId) {
   const sticky = conversationId ? affinities.get(affinityKey(conversationId))?.accountId : undefined;
   const ordered = orderChatGptAccountCandidates(candidates, {
     sticky,
-    ...selectionOptions(policy, leftoverByIdFromCache(now)),
+    ...selectionOptions(policy, leftoverByIdFromCache(now), reserveSelectionById(now)),
   });
   const ready = ordered.filter((entry) => (cooldowns.get(entry.id) || 0) <= now);
   return ready.length ? ready : ordered;

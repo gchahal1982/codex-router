@@ -120,6 +120,8 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
   const bridge = target?.modelSettings?.visionBridge;
   const modelSync = target?.modelSettings?.modelSync;
   const failover = target?.modelSettings?.failover;
+  const reserve = target?.modelSettings?.chatgptReserve;
+  const reserveFound = reserve?.available?.length ?? 0;
   // `gpt-reserve` is deliberately absent. It is not a model anyone selects: the
   // Codex app swaps to it on its own once the primary ChatGPT limit is spent,
   // spending a second allowance on the same subscription. The router passes
@@ -146,7 +148,8 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
     ["tool-result-aging", aging?.enabled === true],
     ["native-tool-result-aging", aging?.nativeEnabled === true],
     ["vision-bridge", bridge?.enabled === true],
-  ]), [aging?.enabled, aging?.nativeEnabled, bridge?.enabled, modelSync?.enabled, target?.signedRouting]);
+    ["chatgpt-reserve", reserve?.enabled === true],
+  ]), [aging?.enabled, aging?.nativeEnabled, bridge?.enabled, modelSync?.enabled, reserve?.enabled, target?.signedRouting]);
   const optimisticToggles = useOptimisticValues(toggleStates, runAction);
   const toolResultAgingEnabled = optimisticToggles.value("tool-result-aging", aging?.enabled === true);
   // Same split the tray menu shows: the models the operator already pays for,
@@ -233,6 +236,38 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
                   <option value="default">{t("settings.effort.useChat")}</option>
                   {defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
                 </select>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>{t("settings.reserve.title")}</strong>
+                  <small>{reserveFound > 0 ? t("settings.reserve.found").replace("{count}", String(reserveFound)) : t("settings.reserve.unavailable")}</small>
+                </div>
+                <Toggle
+                  checked={optimisticToggles.value("chatgpt-reserve", reserve?.enabled === true)}
+                  disabled={!api || (!reserve?.enabled && !reserve?.accounts?.length)}
+                  label={t("settings.reserve.title")}
+                  onChange={(enabled) => api && void optimisticToggles.mutate("chatgpt-reserve", enabled, "Change ChatGPT reserve rotation", () => api.setChatGptReserveEnabled(enabled))}
+                />
+              </div>
+              <div className="setting-row">
+                <div><strong>{t("settings.reserveEffort.title")}</strong><small>{t("settings.reserveEffort.detail")}</small></div>
+                <select aria-label={t("settings.reserveEffort.title")} value={reserve?.effort || "medium"} disabled={!api || !reserve?.enabled} onChange={(event) => api && void runAction("Change reserve reasoning effort", () => api.setChatGptReserveEffort(event.target.value))}>
+                  {defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+                </select>
+              </div>
+              <div className="setting-row">
+                <div><strong>{t("settings.reserveCronEffort.title")}</strong><small>{t("settings.reserveCronEffort.detail")}</small></div>
+                <select aria-label={t("settings.reserveCronEffort.title")} value={reserve?.cronEffort || "default"} disabled={!api || !reserve?.enabled} onChange={(event) => api && void runAction("Change reserve effort for scheduled tasks", () => api.setChatGptReserveCronEffort(event.target.value))}>
+                  <option value="default">{t("settings.effort.useChat")}</option>
+                  {defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+                </select>
+              </div>
+              <div className="setting-row">
+                <div><strong>{t("settings.reserve.scan")}</strong><small>{reserveFound > 0 ? t("settings.reserve.found").replace("{count}", String(reserveFound)) : t("settings.reserve.none")}</small></div>
+                <div className="row-actions">
+                  <Button variant="secondary" disabled={!api} onClick={() => api && void runAction("Scan ChatGPT accounts for reserve", () => api.discoverChatGptReserve())}>{t("settings.reserve.scan")}</Button>
+                  <Button variant="secondary" disabled={!api || reserveFound === 0} onClick={() => api && void runAction("Use discovered reserve accounts", () => api.useDiscoveredChatGptReserve())}>{t("settings.reserve.adopt")}</Button>
+                </div>
               </div>
               <div className="setting-row">
                 <div>
