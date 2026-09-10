@@ -550,7 +550,10 @@ async function validateCatalogProvider(providerId) {
 async function validateModel(slug) {
   const value = stringValue(slug, "Model", MODEL_SLUG);
   const models = await modelEntries();
-  if (value !== "gpt-reserve" && !models.some((model) => model.slug === value)) throw new Error(`Unknown model: ${value}`);
+  // `gpt-reserve` is not accepted here on purpose: the Codex app escalates to
+  // that allowance by itself and the router passes those turns through, so it is
+  // never a value an operator assigns to a setting.
+  if (!models.some((model) => model.slug === value)) throw new Error(`Unknown model: ${value}`);
   return value;
 }
 

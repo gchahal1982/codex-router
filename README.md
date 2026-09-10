@@ -976,8 +976,7 @@ The equivalent local commands are:
 ./bin/control model-sync cron-effort EFFORT
 ```
 
-Either default can name `gpt-reserve`, the reserve alias the router resolves per
-request rather than a published catalog entry. An effort accepts `none`,
+An effort accepts `none`,
 `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`; `default` clears
 the override and leaves each task's own effort in place.
 
@@ -996,6 +995,16 @@ never reached it. Name a takeover model and the turn continues instead.
 It is off until you choose that model, because a ChatGPT subscription is already
 paid for while the model that takes over may be metered. Chats and scheduled
 tasks can run at different depths, the same split the defaults above use.
+
+The full order is three stages, and only the last one is configured here:
+
+1. **Native ChatGPT**, until the primary limit is spent.
+2. **The ChatGPT reserve allowance** (`gpt-reserve`). The Codex app escalates to
+   this by itself; the router relays those turns untouched so a second budget on
+   a subscription you already pay for is never skipped for a routed model. It is
+   deliberately not a selectable setting, and an escalation never pins a thread.
+3. **The takeover model** below, once the reserve is spent too and ChatGPT
+   returns a real usage failure.
 
 ```sh
 ./bin/control failover takeover kiro-prism/gpt-5.6-sol

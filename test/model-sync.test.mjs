@@ -102,7 +102,7 @@ test("independent chat and automation defaults apply model and nested effort", a
   module.setModelSyncEnabled(true);
   module.setModelSyncDefaults({
     chatModel: "deepseek/deepseek-v4-flash",
-    cronModel: "gpt-reserve",
+    cronModel: "kiro-prism/gpt-5.6-sol",
   });
   module.setModelSyncEfforts({ chatEffort: "high", cronEffort: "medium" });
 
@@ -119,7 +119,7 @@ test("independent chat and automation defaults apply model and nested effort", a
   );
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "cron" }),
-    { model: "gpt-reserve", reasoning: { effort: "medium" }, reasoning_effort: "medium" },
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "medium" }, reasoning_effort: "medium" },
   );
 });
 
@@ -137,17 +137,17 @@ test("an automation effort override applies without a cron model override", asyn
   setThreadModel("chat", "gpt-5.6-sol");
   setThreadModel("cron", "gpt-5.6-sol", "automation");
   module.setModelSyncEnabled(true);
-  module.setModelSyncDefaults({ chatModel: "gpt-reserve", cronModel: "" });
+  module.setModelSyncDefaults({ chatModel: "kiro-prism/gpt-5.6-sol", cronModel: "" });
   module.setModelSyncEfforts({ cronEffort: "xhigh" });
 
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "chat" }),
-    { model: "gpt-reserve" },
+    { model: "kiro-prism/gpt-5.6-sol" },
     "a chat turn keeps its own effort when only the automation level is set",
   );
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "cron" }),
-    { model: "gpt-reserve", reasoning: { effort: "xhigh" }, reasoning_effort: "xhigh" },
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "xhigh" }, reasoning_effort: "xhigh" },
   );
 });
 
@@ -183,13 +183,13 @@ test("a thread's own picker choice supersedes the global default", async () => {
   setThreadModel("mine", "gpt-5.6-sol");
   setThreadModel("other", "gpt-5.6-sol");
   module.setModelSyncEnabled(true);
-  module.setModelSyncDefaults({ chatModel: "gpt-reserve" });
+  module.setModelSyncDefaults({ chatModel: "kiro-prism/gpt-5.6-sol" });
   module.setModelSyncEfforts({ chatEffort: "high" });
 
   // Both threads start on the global default, effort included.
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "mine" }),
-    { model: "gpt-reserve", reasoning: { effort: "high" }, reasoning_effort: "high" },
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" }, reasoning_effort: "high" },
   );
 
   // The operator moves this one thread's dropdown. The router records the pin
@@ -210,16 +210,16 @@ test("a thread's own picker choice supersedes the global default", async () => {
 
   // The global default still governs every other window and the snapshot.
   const snapshot = module.modelSyncSnapshot();
-  assert.equal(snapshot.chatModel, "gpt-reserve");
+  assert.equal(snapshot.chatModel, "kiro-prism/gpt-5.6-sol");
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "other" }),
-    { model: "gpt-reserve", reasoning: { effort: "high" }, reasoning_effort: "high" },
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" }, reasoning_effort: "high" },
   );
 
   // Choosing the default again in that thread hands it back to the router.
   assert.deepEqual(
-    module.synchronizedPayload({ model: "gpt-reserve" }, { threadId: "mine" }),
-    { model: "gpt-reserve", reasoning: { effort: "high" }, reasoning_effort: "high" },
+    module.synchronizedPayload({ model: "kiro-prism/gpt-5.6-sol" }, { threadId: "mine" }),
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" }, reasoning_effort: "high" },
   );
   assert.equal(module.modelSyncSnapshot().pinnedThreadCount, undefined);
 });
@@ -229,14 +229,50 @@ test("a new thread is adopted by the default rather than pinned", async () => {
   writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
   setThreadModel("existing", "gpt-5.6-sol");
   module.setModelSyncEnabled(true);
-  module.setModelSyncDefaults({ chatModel: "gpt-reserve" });
+  module.setModelSyncDefaults({ chatModel: "kiro-prism/gpt-5.6-sol" });
 
   // A window Codex opened after sync was enabled has no observed history. It
   // arrives on whatever Codex hardwired, which is not a picker decision, so the
   // default applies and no pin is recorded.
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5-codex" }, { threadId: "fresh" }),
-    { model: "gpt-reserve" },
+    { model: "kiro-prism/gpt-5.6-sol" },
   );
   assert.equal(module.modelSyncSnapshot().pinnedThreadCount, undefined);
+});
+
+test("the ChatGPT reserve allowance passes through and never pins a thread", async () => {
+  resetFixture();
+  writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
+  setThreadModel("chat", "gpt-5.6-sol");
+  module.setModelSyncEnabled(true);
+  module.setModelSyncDefaults({ chatModel: "kiro-prism/claude-opus-5" });
+  module.setModelSyncEfforts({ chatEffort: "high" });
+
+  // Codex swaps to the reserve allowance on its own once the primary ChatGPT
+  // limit is spent. Rewriting that to the routed default would skip a budget the
+  // operator already pays for, so the turn is relayed exactly as it arrived --
+  // including no effort override, which belongs to the routed default.
+  const reserve = module.synchronizedPayload({ model: "gpt-reserve" }, { threadId: "chat" });
+  assert.deepEqual(reserve, { model: "gpt-reserve" });
+  assert.equal(
+    module.modelSyncSnapshot().pinnedThreadCount,
+    undefined,
+    "an automatic escalation is not a picker choice",
+  );
+
+  // Once the reserve window resets, the thread is governed by the default again
+  // rather than being stranded on whatever the app last sent.
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "chat" }),
+    {
+      model: "kiro-prism/claude-opus-5",
+      reasoning: { effort: "high" },
+      reasoning_effort: "high",
+    },
+  );
+
+  // The background watcher applies the same rule.
+  setThreadModel("chat", "gpt-reserve");
+  assert.equal(module.refreshModelSyncFromCodex().pinnedThreadCount, undefined);
 });

@@ -120,21 +120,13 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
   const bridge = target?.modelSettings?.visionBridge;
   const modelSync = target?.modelSettings?.modelSync;
   const failover = target?.modelSettings?.failover;
-  // `gpt-reserve` is the reserve alias the router resolves per request, not a
-  // catalog entry, so it never arrives in `target.models`. Both defaults still
-  // have to be able to name it; the dedupe lets a real catalog entry win if the
-  // slug is ever published for real.
-  const reserveModel: RouterModel = {
-    slug: "gpt-reserve",
-    displayName: "GPT reserve",
-    provider: "openai",
-    enabled: true,
-    visible: true,
-  };
-  const defaultModels = [
-    ...(target?.models || []).filter((model) => model.enabled && model.available !== false),
-    reserveModel,
-  ].filter((model, index, all) => all.findIndex((item) => item.slug === model.slug) === index);
+  // `gpt-reserve` is deliberately absent. It is not a model anyone selects: the
+  // Codex app swaps to it on its own once the primary ChatGPT limit is spent,
+  // spending a second allowance on the same subscription. The router passes
+  // those turns through untouched, so offering it here would only let an
+  // operator pin a slug that the app alone is meant to choose.
+  const defaultModels = (target?.models || [])
+    .filter((model) => model.enabled && model.available !== false);
   const defaultEffortOptions = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
   // Native models are excluded: the takeover exists because the signed-in
   // ChatGPT plan is empty, and another model on that same plan cannot serve the

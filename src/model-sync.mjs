@@ -18,6 +18,14 @@ import {
 } from "./paths.mjs";
 
 const RECENT_MODELS_KEY = "composer-recent-model-configurations-v1";
+
+// Codex escalates to the ChatGPT reserve budget by itself once the primary
+// limit is spent: the app swaps the request model to this slug, which is a
+// second allowance on the same subscription rather than a model anybody picked.
+// It must pass through untouched -- rewriting it to a routed default would skip
+// the reserve the operator already pays for -- and it is never a picker event,
+// so it must not pin the thread either.
+export const CHATGPT_RESERVE_SLUG = "gpt-reserve";
 // The published effort ladder, plus the sentinel that clears the override so
 // each task keeps whatever effort it was created with.
 export const EFFORT_LEVELS = Object.freeze([
@@ -233,6 +241,9 @@ export function refreshModelSyncFromCodex() {
   // quietly repoint every other window and scheduled task.
   const pinnedThreads = { ...settings.pinnedThreads };
   for (const row of changed) {
+    // An automatic escalation to the reserve allowance is not a picker choice,
+    // so it neither creates a pin nor clears one the operator made.
+    if (row.model === CHATGPT_RESERVE_SLUG) continue;
     const globalModel = settings.chatModel || settings.selectedModel;
     if (row.model === globalModel) delete pinnedThreads[row.id];
     else pinnedThreads[row.id] = row.model;
@@ -302,6 +313,10 @@ export function synchronizedPayload(payload, { bypass = false, threadId } = {}) 
     selectedEffort = settings.cronEffort || selectedEffort;
   }
   if (!selectedModel || !incomingModel) return payload;
+  // The app reached for the reserve allowance on its own. Leave the turn exactly
+  // as it arrived and record nothing: this thread has not changed what it wants,
+  // it is spending the second half of the same subscription.
+  if (incomingModel === CHATGPT_RESERVE_SLUG) return payload;
 
   const observedModel = id ? settings.observedModels[id] : undefined;
   const wasPinned = Boolean(id && settings.pinnedThreads[id]);
