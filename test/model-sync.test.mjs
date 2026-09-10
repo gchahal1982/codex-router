@@ -216,12 +216,13 @@ test("a thread's own picker choice supersedes the global default", async () => {
     { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" }, reasoning_effort: "high" },
   );
 
-  // Choosing the default again in that thread hands it back to the router.
+  // Naming the default model in that thread relays it verbatim. A routed slug is
+  // the operator's own choice, so the router neither rewrites the model nor
+  // imposes the default depth on it -- it only has to arrive unchanged.
   assert.deepEqual(
     module.synchronizedPayload({ model: "kiro-prism/gpt-5.6-sol" }, { threadId: "mine" }),
-    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" }, reasoning_effort: "high" },
+    { model: "kiro-prism/gpt-5.6-sol" },
   );
-  assert.equal(module.modelSyncSnapshot().pinnedThreadCount, undefined);
 });
 
 test("a new thread is adopted by the default rather than pinned", async () => {
@@ -275,4 +276,51 @@ test("the ChatGPT reserve allowance passes through and never pins a thread", asy
   // The background watcher applies the same rule.
   setThreadModel("chat", "gpt-reserve");
   assert.equal(module.refreshModelSyncFromCodex().pinnedThreadCount, undefined);
+});
+
+test("a routed model is never moved onto native ChatGPT by a default", async () => {
+  resetFixture();
+  writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
+  setThreadModel("prism", "kiro-prism/claude-opus-5");
+  setThreadModel("native", "gpt-6-astra");
+  module.setModelSyncEnabled(true);
+
+  // The state that shipped the bug: sync on, no explicit chat default, so the
+  // fallback is the native slug Codex last recorded. No pin exists, because this
+  // thread never *changed* model -- it has always been on Prism.
+  writeFileSync(syncFile, JSON.stringify({
+    version: 2,
+    enabled: true,
+    selectedModel: "gpt-5.6-sol",
+    observedModels: { prism: "kiro-prism/claude-opus-5", native: "gpt-6-astra" },
+  }));
+
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "kiro-prism/claude-opus-5" }, { threadId: "prism" }),
+    { model: "kiro-prism/claude-opus-5" },
+    "a provider-qualified slug is the operator's choice and outranks any default",
+  );
+  // A native thread is still governed, which is the whole point of the feature.
+  assert.equal(
+    module.synchronizedPayload({ model: "gpt-6-astra" }, { threadId: "native" }).model,
+    "gpt-5.6-sol",
+  );
+
+  // The rule holds routed-to-routed as well: a Prism thread is not moved to a
+  // different Prism model just because that one is the default.
+  module.setModelSyncDefaults({ chatModel: "kiro-prism/gpt-5.6-sol" });
+  module.setModelSyncEfforts({ chatEffort: "high" });
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "kiro-prism/claude-opus-5" }, { threadId: "prism" }),
+    { model: "kiro-prism/claude-opus-5" },
+    "neither the model nor the effort is overridden",
+  );
+  // And an unqualified native thread still adopts the routed default.
+  assert.equal(
+    module.synchronizedPayload({ model: "gpt-6-astra" }, { threadId: "native" }).model,
+    "kiro-prism/gpt-5.6-sol",
+  );
+
+  // The watcher records long-standing routed threads too, not only changed ones.
+  assert.equal(module.refreshModelSyncFromCodex().pinnedThreadCount, 1);
 });

@@ -26,6 +26,13 @@ const RECENT_MODELS_KEY = "composer-recent-model-configurations-v1";
 // the reserve the operator already pays for -- and it is never a picker event,
 // so it must not pin the thread either.
 export const CHATGPT_RESERVE_SLUG = "gpt-reserve";
+
+// A provider-qualified slug ("kiro-prism/claude-opus-5") is a routed model the
+// operator selected. A bare slug ("gpt-5.6-sol", "gpt-6-astra") is native
+// ChatGPT traffic that Codex hardwired. Same rule as `isNativeOpenAIRoute`.
+function isRoutedSlug(slug) {
+  return typeof slug === "string" && slug.includes("/");
+}
 // The published effort ladder, plus the sentinel that clears the override so
 // each task keeps whatever effort it was created with.
 export const EFFORT_LEVELS = Object.freeze([
@@ -240,10 +247,19 @@ export function refreshModelSyncFromCodex() {
   // -- the Control Center -- so a single window changing its model must not
   // quietly repoint every other window and scheduled task.
   const pinnedThreads = { ...settings.pinnedThreads };
+  // Every thread on a routed model is recorded, not only the ones seen changing.
+  // A window that has been on `kiro-prism/...` since before these defaults
+  // existed never appeared in `changed`, so it never got recorded and the
+  // snapshot under-reported how many windows run their own model.
+  for (const row of rows) {
+    if (isRoutedSlug(row.model)) pinnedThreads[row.id] = row.model;
+  }
   for (const row of changed) {
     // An automatic escalation to the reserve allowance is not a picker choice,
     // so it neither creates a pin nor clears one the operator made.
     if (row.model === CHATGPT_RESERVE_SLUG) continue;
+    // A routed model is handled above and is never released by a default.
+    if (isRoutedSlug(row.model)) continue;
     const globalModel = settings.chatModel || settings.selectedModel;
     if (row.model === globalModel) delete pinnedThreads[row.id];
     else pinnedThreads[row.id] = row.model;
@@ -317,6 +333,42 @@ export function synchronizedPayload(payload, { bypass = false, threadId } = {}) 
   // as it arrived and record nothing: this thread has not changed what it wants,
   // it is spending the second half of the same subscription.
   if (incomingModel === CHATGPT_RESERVE_SLUG) return payload;
+
+  // A turn that already names a routed model keeps it, always.
+  //
+  // This is the invariant these defaults exist inside, not a special case: a
+  // thread on `kiro-prism/claude-opus-5` chose a non-native provider, and a
+  // global default must never quietly move it back onto ChatGPT. The pin
+  // bookkeeping below only ever noticed a *change* of model, so a thread that
+  // had been sitting on a routed model since before these defaults existed was
+  // never pinned -- and got rewritten to the native default on every turn.
+  //
+  // Guarding on the slug rather than on recorded history makes that impossible
+  // regardless of what the state file remembers.
+  //
+  // It holds for routed-to-routed too. A thread on `kiro-prism/claude-opus-5`
+  // named that provider and that model; silently serving it
+  // `kiro-prism/gpt-5.6-sol` because that is the global default is the same
+  // override in a smaller disguise. These defaults exist to place turns that
+  // never made a choice -- native slugs Codex hardwired -- not to overrule one
+  // the operator already made.
+  if (isRoutedSlug(incomingModel)) {
+    // Recorded so the watcher and the snapshot agree that this thread runs on
+    // its own model, without the write being what protects it.
+    if (id && settings.pinnedThreads[id] !== incomingModel) {
+      writeSettings({
+        enabled: true,
+        selectedModel: settings.selectedModel,
+        ...(settings.chatModel ? { chatModel: settings.chatModel } : {}),
+        ...(settings.cronModel ? { cronModel: settings.cronModel } : {}),
+        ...(settings.chatEffort ? { chatEffort: settings.chatEffort } : {}),
+        ...(settings.cronEffort ? { cronEffort: settings.cronEffort } : {}),
+        pinnedThreads: { ...settings.pinnedThreads, [id]: incomingModel },
+        observedModels: { ...settings.observedModels, [id]: incomingModel },
+      });
+    }
+    return payload;
+  }
 
   const observedModel = id ? settings.observedModels[id] : undefined;
   const wasPinned = Boolean(id && settings.pinnedThreads[id]);
