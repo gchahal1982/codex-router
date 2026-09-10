@@ -1579,8 +1579,8 @@ test("picker mutations debounce a macOS Codex restart until publication succeeds
   const source = await readFile(new URL("../apps/control-center/electron/ipc.mjs", import.meta.url), "utf8");
   assert.match(source, /const scheduleCodexRestart = \(\) =>/);
   assert.match(source, /clearTimeout\(codexRestartTimer\)/);
-  assert.match(source, /tell application id \\"com\.openai\.codex\\" to quit/);
-  const handler = source.slice(source.indexOf('handleAction("setPickerModel"'), source.indexOf('handleAction("setPickerModels"')));
+  assert.match(source, /tell application id "com\.openai\.codex" to quit/);
+  const handler = source.slice(source.indexOf('handleAction("setPickerModel"'), source.indexOf('handleAction("setPickerModels"'));
   assert.ok(handler.indexOf("await runJson") < handler.indexOf("scheduleCodexRestart()"));
 });
 
