@@ -130,6 +130,11 @@ export interface RouterControl {
   setRouterDefault(model: string): Promise<unknown>;
   clearRouterDefault(): Promise<unknown>;
   setSignedRouting(enabled: boolean): Promise<unknown>;
+  setModelSync(enabled: boolean): Promise<unknown>;
+  setChatDefaultModel(slug: string): Promise<unknown>;
+  setCronDefaultModel(slug: string): Promise<unknown>;
+  setChatDefaultEffort(effort: string): Promise<unknown>;
+  setCronDefaultEffort(effort: string): Promise<unknown>;
   setChatGptSessionSharing(enabled: boolean): Promise<ChatGptSessionStatus>;
   setPresence(mode: PresenceMode): Promise<unknown>;
   controlService(action: ServiceAction): Promise<unknown>;

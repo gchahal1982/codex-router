@@ -952,6 +952,26 @@ choice after an update or repair, and restores that prior default when cleared:
 This is separate from login-free mode, which has always owned its routed
 default. Fully quit and reopen Codex after changing either default.
 
+### Use one model in every Codex window and scheduled task
+
+The Control Center's **Use one model everywhere** setting makes the most recent
+choice in Codex's model picker authoritative at execution time. A picker change
+therefore applies to every open task on its next turn and to both new and
+existing cron automations on their next run. In-flight turns are never moved.
+Optional chat and scheduled-task effort defaults are independent; prompts,
+schedules, notification policies, and project bindings remain untouched.
+
+Heartbeat automations continue in their attached task and naturally receive the
+same synchronized model. Existing automation model fields remain visible and
+editable in Codex; turn synchronization wins only while the switch is enabled.
+The equivalent local commands are:
+
+```sh
+./bin/control model-sync on
+./bin/control model-sync status
+./bin/control model-sync off
+```
+
 The API-key prompt disables terminal echo. Protected files use mode `600` on
 POSIX and an inheritance-disabled, current-user ACL on Windows. Diagnostics
 report credential presence and source, never the value.

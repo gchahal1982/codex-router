@@ -230,6 +230,7 @@ async function emitProbe() {
   const hiddenModels = new Set(picker.hidden);
   const visibleModels = new Set(picker.visible);
   const subagentSettings = subagentSettingsSnapshot();
+  const { modelSyncSnapshot } = await import("./model-sync.mjs");
   const usageEvents = TARGET === "codex"
     ? (await import("./usage-events.mjs")).recentUsageEvents()
     : [];
@@ -316,6 +317,7 @@ async function emitProbe() {
             usageEvents,
             nativeAliases: readNativeAliases(),
             modelSettings: {
+              modelSync: modelSyncSnapshot(),
               subagents: subagentSettings,
               picker: modelPickerSnapshot(),
               toolResultAging: toolResultAgingSnapshot(),
@@ -1070,6 +1072,30 @@ async function setRouterDefault(action, slug) {
     throw new Error((result.stderr || "The Codex router default could not be changed.").trim());
   }
   process.stdout.write(result.stdout);
+}
+
+async function handleModelSync(action = "status", modelValue) {
+  const { modelSyncSnapshot, setModelSyncEnabled, setModelSyncDefaults, setModelSyncEfforts } = await import("./model-sync.mjs");
+  if (action === "status") {
+    process.stdout.write(`${JSON.stringify(modelSyncSnapshot())}\n`);
+    return;
+  }
+  if (!['on', 'off'].includes(action)) {
+    if (action === "chat" || action === "cron") {
+      const value = String(modelValue || "").trim();
+      if (!value) throw new Error(`Usage: control model-sync ${action} MODEL`);
+      process.stdout.write(`${JSON.stringify(setModelSyncDefaults(action === "chat" ? { chatModel: value } : { cronModel: value }))}\n`);
+      return;
+    }
+    if (action === "chat-effort" || action === "cron-effort") {
+      const value = String(modelValue || "").trim();
+      if (!value) throw new Error(`Usage: control model-sync ${action} EFFORT`);
+      process.stdout.write(`${JSON.stringify(setModelSyncEfforts(action === "chat-effort" ? { chatEffort: value } : { cronEffort: value }))}\n`);
+      return;
+    }
+    throw new Error("Usage: control model-sync <status|on|off|chat MODEL|cron MODEL>");
+  }
+  process.stdout.write(`${JSON.stringify(setModelSyncEnabled(action === "on"))}\n`);
 }
 
 async function updateAndVerifyCodex() {
@@ -2923,6 +2949,8 @@ if (args.includes("--probe")) {
   await setLoginFreeModel(args[1]);
 } else if (args[0] === "router-default") {
   await setRouterDefault(args[1], args[2]);
+} else if (args[0] === "model-sync") {
+  await handleModelSync(args[1], args[2]);
 } else if (args[0] === "subagents") {
   await handleSubagents(args[1], args[2], args[3], args.slice(2));
 } else if (args[0] === "tool-result-aging") {

@@ -546,7 +546,7 @@ async function validateCatalogProvider(providerId) {
 async function validateModel(slug) {
   const value = stringValue(slug, "Model", MODEL_SLUG);
   const models = await modelEntries();
-  if (!models.some((model) => model.slug === value)) throw new Error(`Unknown model: ${value}`);
+  if (value !== "gpt-reserve" && !models.some((model) => model.slug === value)) throw new Error(`Unknown model: ${value}`);
   return value;
 }
 
@@ -1079,6 +1079,11 @@ export function registerIpcHandlers({
   handleAction("setSignedRouting", async ({ enabled } = {}) => {
     if (typeof enabled !== "boolean") throw new Error("enabled must be boolean.");
     return runJson(["signed-routing", enabled ? "on" : "off"], { timeoutMs: CATALOG_MUTATION_TIMEOUT_MS });
+  });
+  handleAction("setModelSync", async ({ enabled } = {}) => {
+    if (typeof enabled !== "boolean") throw new Error("enabled must be boolean.");
+    await runControl(["model-sync", enabled ? "on" : "off"], { timeoutMs: 60_000 });
+    return snapshot();
   });
   handleAction("setChatGptSessionSharing", async ({ enabled } = {}) => {
     if (typeof enabled !== "boolean") throw new Error("enabled must be boolean.");

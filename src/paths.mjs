@@ -45,6 +45,11 @@ export const SOURCE_ROOT = configuredSourceRoot
   : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const CODEX_HOME =
   process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+export const CODEX_GLOBAL_STATE_PATH =
+  process.env.MODEL_ROUTER_CODEX_GLOBAL_STATE ||
+  path.join(CODEX_HOME, ".codex-global-state.json");
+export const CODEX_STATE_DATABASE_PATH =
+  process.env.MODEL_ROUTER_CODEX_STATE_DATABASE || path.join(CODEX_HOME, "state_5.sqlite");
 
 // DeepSeek Harness reads its own home from `$DSH_HOME`, defaulting to `~/.dsh`
 // (`dsh-settings-file` and `dsh-credentials-local` both resolve it that way).
@@ -121,6 +126,8 @@ export const SIGNED_PROVIDER_MODE_PATH = path.join(STATE_DIR, "signed-provider-m
 // An opt-in routed default for signed-in Codex. The router owns this small
 // state file, while Codex continues to own the actual config document.
 export const CODEX_DEFAULT_MODEL_PATH = path.join(STATE_DIR, "codex-default-model.json");
+export const MODEL_SYNC_PATH =
+  process.env.MODEL_ROUTER_MODEL_SYNC_STATE || path.join(STATE_DIR, "model-sync.json");
 export const PROVIDER_SELECTION_PATH = path.join(STATE_DIR, "enabled-providers.json");
 export const DISCOVERY_MODE_PATH = path.join(STATE_DIR, "discovery-mode.json");
 // Explicit, shared-plane consent for letting router-authenticated local clients

@@ -231,6 +231,18 @@ export interface RouterTarget {
   routerDefaultManaged?: boolean;
   usageEvents?: UsageEvent[];
   modelSettings?: {
+    modelSync?: {
+      enabled: boolean;
+      available: boolean;
+      invalid?: boolean;
+      selectedModel?: string;
+      chatModel?: string;
+      cronModel?: string;
+      chatEffort?: string;
+      cronEffort?: string;
+      reasoningEffort?: string;
+      path?: string;
+    };
     subagents: SubagentSettings;
     picker: { hidden: string[]; visible?: string[]; hasExplicitVisibility?: boolean; path?: string };
     localModels: LocalModelsSnapshot;
@@ -756,6 +768,11 @@ export interface RouterControlApi {
   setRouterDefault(model: string): Promise<unknown>;
   clearRouterDefault(): Promise<unknown>;
   setSignedRouting(enabled: boolean): Promise<unknown>;
+  setModelSync(enabled: boolean): Promise<unknown>;
+  setChatDefaultModel(slug: string): Promise<unknown>;
+  setCronDefaultModel(slug: string): Promise<unknown>;
+  setChatDefaultEffort(effort: string): Promise<unknown>;
+  setCronDefaultEffort(effort: string): Promise<unknown>;
   setChatGptSessionSharing(enabled: boolean): Promise<ChatGptSessionStatus>;
   setPresence(mode: "always" | "follow-codex"): Promise<PresenceSnapshot>;
   controlService(action: "status" | "start"): Promise<unknown>;

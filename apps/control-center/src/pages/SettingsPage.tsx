@@ -118,12 +118,16 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
     : RETENTION_CHOICES;
 
   const bridge = target?.modelSettings?.visionBridge;
+  const modelSync = target?.modelSettings?.modelSync;
+  const defaultModels = [...(target?.models || []).filter((model) => model.enabled && model.available !== false), { slug: "gpt-reserve", displayName: "GPT reserve", enabled: true, available: true } as any].filter((model, index, all) => all.findIndex((item) => item.slug === model.slug) === index);
+  const defaultEffortOptions = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
   const toggleStates = useMemo(() => new Map([
     ["signed-routing", target?.signedRouting === true],
+    ["model-sync", modelSync?.enabled === true],
     ["tool-result-aging", aging?.enabled === true],
     ["native-tool-result-aging", aging?.nativeEnabled === true],
     ["vision-bridge", bridge?.enabled === true],
-  ]), [aging?.enabled, aging?.nativeEnabled, bridge?.enabled, target?.signedRouting]);
+  ]), [aging?.enabled, aging?.nativeEnabled, bridge?.enabled, modelSync?.enabled, target?.signedRouting]);
   const optimisticToggles = useOptimisticValues(toggleStates, runAction);
   const toolResultAgingEnabled = optimisticToggles.value("tool-result-aging", aging?.enabled === true);
   // Same split the tray menu shows: the models the operator already pays for,
@@ -161,6 +165,34 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
               <div className="setting-row">
                 <div><strong>{t("settings.signedRouting.title")}</strong><small>{t("settings.signedRouting.detail")}</small></div>
                 <Toggle checked={optimisticToggles.value("signed-routing", target?.signedRouting === true)} disabled={!api || !target} label={t("settings.signedRouting.title")} onChange={(enabled) => api && void optimisticToggles.mutate("signed-routing", enabled, "Change signed routing", () => api.setSignedRouting(enabled))} />
+              </div>
+              <div className="setting-row">
+                <div><strong>{t("settings.chatDefault.title")}</strong><small>{t("settings.chatDefault.detail")}</small></div>
+                <select aria-label={t("settings.chatDefault.title")} value={modelSync?.chatModel || modelSync?.selectedModel || ""} disabled={!api || !modelSync?.enabled} onChange={(event) => api && void runAction("Change chat default model", () => api.setChatDefaultModel(event.target.value))}>
+                  <option value="">Use Codex selection</option>
+                  {defaultModels.map((model) => <option key={model.slug} value={model.slug}>{model.displayName || model.slug}</option>)}
+                </select>
+              </div>
+              <div className="setting-row"><div><strong>Chat reasoning effort</strong><small>Default effort for all interactive chats.</small></div><select value={modelSync?.chatEffort || "medium"} disabled={!api || !modelSync?.enabled} onChange={(e) => api && void runAction("Change chat reasoning effort", () => api.setChatDefaultEffort(e.target.value))}>{defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}</select></div>
+              <div className="setting-row">
+                <div><strong>{t("settings.cronDefault.title")}</strong><small>{t("settings.cronDefault.detail")}</small></div>
+                <select aria-label={t("settings.cronDefault.title")} value={modelSync?.cronModel || modelSync?.selectedModel || ""} disabled={!api || !modelSync?.enabled} onChange={(event) => api && void runAction("Change scheduled-task default model", () => api.setCronDefaultModel(event.target.value))}>
+                  <option value="">Use chat default</option>
+                  {defaultModels.map((model) => <option key={model.slug} value={model.slug}>{model.displayName || model.slug}</option>)}
+                </select>
+              </div>
+              <div className="setting-row"><div><strong>Scheduled-task reasoning effort</strong><small>Default effort for cron and automation runs.</small></div><select value={modelSync?.cronEffort || modelSync?.chatEffort || "medium"} disabled={!api || !modelSync?.enabled} onChange={(e) => api && void runAction("Change scheduled-task reasoning effort", () => api.setCronDefaultEffort(e.target.value))}>{defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}</select></div>
+              <div className="setting-row">
+                <div>
+                  <strong>{t("settings.modelSync.title")}</strong>
+                  <small>{modelSync?.available ? t("settings.modelSync.detail") : t("settings.modelSync.unavailable")}</small>
+                </div>
+                <Toggle
+                  checked={optimisticToggles.value("model-sync", modelSync?.enabled === true)}
+                  disabled={!api || !target || (!modelSync?.enabled && !modelSync?.available)}
+                  label={t("settings.modelSync.title")}
+                  onChange={(enabled) => api && void optimisticToggles.mutate("model-sync", enabled, "Change model sync", () => api.setModelSync(enabled))}
+                />
               </div>
               <div className="setting-row">
                 <div>

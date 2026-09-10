@@ -72,6 +72,7 @@ import { discoveryDisabled } from "./discovery-mode.mjs";
 import { readNativeAliases } from "./native-alias.mjs";
 import { nativeContextVariantBase } from "./native-context-variants.mjs";
 import { readNativeRedirect } from "./native-redirect.mjs";
+import { startModelSyncWatcher, synchronizedPayload } from "./model-sync.mjs";
 import {
   followOperatorModel,
   isNativeOpenAIRoute,
@@ -185,6 +186,7 @@ import {
 } from "./fetch-transport.mjs";
 
 installStableFetchTransport();
+startModelSyncWatcher();
 
 const CODEX_THREAD_DATABASE =
   process.env.MODEL_ROUTER_CODEX_STATE_DATABASE ||
@@ -3262,8 +3264,12 @@ async function handleResponses(request, response, requestUrl) {
     const exactRouteProbe = exactRouteProbeRequested(request.headers);
     const encoded = await readRequestBody(request, { signal: controller.signal });
     const body = decodeBody(encoded, request.headers["content-encoding"]);
-    const payload = await parseBodyAsync(body);
+    let payload = await parseBodyAsync(body);
     controller.signal.throwIfAborted();
+    payload = synchronizedPayload(payload, {
+      bypass: exactRouteProbe,
+      threadId: threadIdFromHeaders(request.headers),
+    });
     const compactV1 = /\/responses\/compact$/.test(requestUrl.pathname);
     // Codex remote compaction V2 uses the ordinary Responses endpoint with a
     // terminal trigger. Detect both forms before route selection: Codex may

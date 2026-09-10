@@ -991,6 +991,7 @@ test("preload constructs exact positional IPC payloads", async () => {
     ["setNativeToolResultAging", [false], { enabled: false }],
     ["setToolResultRetentionTtl", [7], { days: 7 }],
     ["setDefaultModel", ["model"], { slug: "model" }],
+    ["setModelSync", [true], { enabled: true }],
     ["setSignedRouting", [false], { enabled: false }],
     ["setPresence", ["always"], { mode: "always" }],
     ["controlService", ["start"], { action: "start" }],
@@ -1105,12 +1106,12 @@ test("control center sidebar keeps the requested product order", async () => {
   assert.match(dashboardStyles, /border-radius: 0/);
 });
 
-test("settings keeps model choice out and exposes durable app preferences", async () => {
+test("settings exposes explicit chat and scheduled-task model defaults", async () => {
   const settings = await readFile(new URL("../apps/control-center/src/pages/SettingsPage.tsx", import.meta.url), "utf8");
-  // Default model selection belongs to the catalog page. Settings owns the
-  // router switches and renderer-local preferences, so it must not grow a
-  // second model-choice control as the catalog evolves.
-  assert.doesNotMatch(settings, /setDefaultModel|default model/i);
+  assert.match(settings, /settings\.chatDefault\.title/);
+  assert.match(settings, /settings\.cronDefault\.title/);
+  assert.match(settings, /setChatDefaultModel\(/);
+  assert.match(settings, /setCronDefaultModel\(/);
   assert.match(settings, /settings\.language\.title/);
   assert.match(settings, /settings\.context\.enable\.title/);
   assert.match(settings, /settings\.vision\.title/);
