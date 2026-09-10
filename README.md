@@ -970,7 +970,16 @@ The equivalent local commands are:
 ./bin/control model-sync on
 ./bin/control model-sync status
 ./bin/control model-sync off
+./bin/control model-sync chat MODEL
+./bin/control model-sync cron MODEL
+./bin/control model-sync chat-effort EFFORT
+./bin/control model-sync cron-effort EFFORT
 ```
+
+Either default can name `gpt-reserve`, the reserve alias the router resolves per
+request rather than a published catalog entry. An effort accepts `none`,
+`minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`; `default` clears
+the override and leaves each task's own effort in place.
 
 The API-key prompt disables terminal echo. Protected files use mode `600` on
 POSIX and an inheritance-disabled, current-user ACL on Windows. Diagnostics

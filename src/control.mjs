@@ -1093,7 +1093,7 @@ async function handleModelSync(action = "status", modelValue) {
       process.stdout.write(`${JSON.stringify(setModelSyncEfforts(action === "chat-effort" ? { chatEffort: value } : { cronEffort: value }))}\n`);
       return;
     }
-    throw new Error("Usage: control model-sync <status|on|off|chat MODEL|cron MODEL>");
+    throw new Error("Usage: control model-sync <status|on|off|chat MODEL|cron MODEL|chat-effort EFFORT|cron-effort EFFORT>");
   }
   process.stdout.write(`${JSON.stringify(setModelSyncEnabled(action === "on"))}\n`);
 }

@@ -102,11 +102,12 @@ test("independent chat and automation defaults apply model and nested effort", a
     {
       model: "deepseek/deepseek-v4-flash",
       reasoning: { summary: "auto", effort: "high" },
+      reasoning_effort: "high",
     },
   );
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "cron" }),
-    { model: "gpt-reserve", reasoning: { effort: "medium" } },
+    { model: "gpt-reserve", reasoning: { effort: "medium" }, reasoning_effort: "medium" },
   );
 });
 
@@ -115,5 +116,51 @@ test("enabling sync requires a recorded desktop model", async () => {
   assert.throws(
     () => module.setModelSyncEnabled(true),
     /Choose a model in Codex first/,
+  );
+});
+
+test("an automation effort override applies without a cron model override", async () => {
+  resetFixture();
+  writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
+  setThreadModel("chat", "gpt-5.6-sol");
+  setThreadModel("cron", "gpt-5.6-sol", "automation");
+  module.setModelSyncEnabled(true);
+  module.setModelSyncDefaults({ chatModel: "gpt-reserve", cronModel: "" });
+  module.setModelSyncEfforts({ cronEffort: "xhigh" });
+
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "chat" }),
+    { model: "gpt-reserve" },
+    "a chat turn keeps its own effort when only the automation level is set",
+  );
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "cron" }),
+    { model: "gpt-reserve", reasoning: { effort: "xhigh" }, reasoning_effort: "xhigh" },
+  );
+});
+
+test("default clears an effort override and off-ladder levels are refused", async () => {
+  resetFixture();
+  writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
+  setThreadModel("chat", "gpt-5.6-sol");
+  module.setModelSyncEnabled(true);
+  module.setModelSyncEfforts({ chatEffort: "high" });
+  assert.equal(module.modelSyncSnapshot().chatEffort, "high");
+
+  assert.equal(module.setModelSyncEfforts({ chatEffort: "default" }).chatEffort, undefined);
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-5.6-sol", reasoning: { effort: "low" } }, { threadId: "chat" }),
+    { model: "gpt-5.6-sol", reasoning: { effort: "low" } },
+    "clearing the override leaves the task's own effort untouched",
+  );
+
+  assert.throws(() => module.setModelSyncEfforts({ chatEffort: "turbo" }), /must be one of/);
+  // A hand-edited level never reaches a provider request.
+  const stored = JSON.parse(readFileSync(syncFile, "utf8"));
+  writeFileSync(syncFile, JSON.stringify({ ...stored, chatEffort: "turbo" }));
+  assert.equal(module.modelSyncSnapshot().chatEffort, undefined);
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "chat" }),
+    { model: "gpt-5.6-sol" },
   );
 });

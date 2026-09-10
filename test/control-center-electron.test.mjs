@@ -1112,6 +1112,11 @@ test("settings exposes explicit chat and scheduled-task model defaults", async (
   assert.match(settings, /settings\.cronDefault\.title/);
   assert.match(settings, /setChatDefaultModel\(/);
   assert.match(settings, /setCronDefaultModel\(/);
+  assert.match(settings, /settings\.chatEffort\.title/);
+  assert.match(settings, /settings\.cronEffort\.title/);
+  assert.match(settings, /setChatDefaultEffort\(/);
+  assert.match(settings, /setCronDefaultEffort\(/);
+  assert.match(settings, /slug: "gpt-reserve"/);
   assert.match(settings, /settings\.language\.title/);
   assert.match(settings, /settings\.context\.enable\.title/);
   assert.match(settings, /settings\.vision\.title/);

@@ -18,6 +18,29 @@ import {
 } from "./paths.mjs";
 
 const RECENT_MODELS_KEY = "composer-recent-model-configurations-v1";
+// The published effort ladder, plus the sentinel that clears the override so
+// each task keeps whatever effort it was created with.
+const EFFORT_LEVELS = Object.freeze([
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "ultra",
+]);
+const CLEAR_EFFORT = "default";
+
+function normalizedEffort(value, label) {
+  if (value === undefined) return undefined;
+  const effort = String(value).trim();
+  if (!effort || effort === CLEAR_EFFORT) return "";
+  if (!EFFORT_LEVELS.includes(effort)) {
+    throw new Error(`${label} must be one of: ${[CLEAR_EFFORT, ...EFFORT_LEVELS].join(", ")}.`);
+  }
+  return effort;
+}
 
 function readSettings() {
   if (!existsSync(MODEL_SYNC_PATH)) return { enabled: false };
@@ -31,8 +54,11 @@ function readSettings() {
       selectedModel: typeof parsed.selectedModel === "string" ? parsed.selectedModel : undefined,
       chatModel: typeof parsed.chatModel === "string" ? parsed.chatModel : undefined,
       cronModel: typeof parsed.cronModel === "string" ? parsed.cronModel : undefined,
-      chatEffort: typeof parsed.chatEffort === "string" ? parsed.chatEffort : undefined,
-      cronEffort: typeof parsed.cronEffort === "string" ? parsed.cronEffort : undefined,
+      // A model slug is only meaningful to the router, which already reports an
+      // unknown one. An effort travels into a provider request, so an
+      // off-ladder value edited in by hand is dropped rather than forwarded.
+      chatEffort: EFFORT_LEVELS.includes(parsed.chatEffort) ? parsed.chatEffort : undefined,
+      cronEffort: EFFORT_LEVELS.includes(parsed.cronEffort) ? parsed.cronEffort : undefined,
       observedModels: parsed.observedModels && typeof parsed.observedModels === "object"
         ? parsed.observedModels
         : {},
@@ -157,10 +183,14 @@ export function setModelSyncDefaults({ chatModel, cronModel } = {}) {
 export function setModelSyncEfforts({ chatEffort, cronEffort } = {}) {
   const settings = readSettings();
   if (!settings.enabled) throw new Error("Enable global model defaults first.");
+  // Validate before the write so a rejected level cannot half-apply, and so the
+  // CLI and the Control Center report the same accepted set.
+  const chat = normalizedEffort(chatEffort, "Chat reasoning effort");
+  const cron = normalizedEffort(cronEffort, "Scheduled-task reasoning effort");
   const next = { enabled: true, selectedModel: settings.selectedModel, observedModels: settings.observedModels };
   for (const key of ["chatModel", "cronModel", "chatEffort", "cronEffort"]) if (settings[key]) next[key] = settings[key];
-  if (chatEffort !== undefined) next.chatEffort = chatEffort || undefined;
-  if (cronEffort !== undefined) next.cronEffort = cronEffort || undefined;
+  if (chat !== undefined) next.chatEffort = chat || undefined;
+  if (cron !== undefined) next.cronEffort = cron || undefined;
   writeSettings(next);
   return modelSyncSnapshot();
 }
@@ -222,13 +252,15 @@ export function synchronizedPayload(payload, { bypass = false, threadId } = {}) 
   const id = typeof threadId === "string" ? threadId.trim() : "";
   let selectedModel = settings.chatModel || settings.selectedModel || readCodexDesktopModelSelection()?.model;
   let selectedEffort = settings.chatEffort;
-  if (id && settings.cronModel) {
+  // An operator can override the automation effort without overriding its model,
+  // so the thread-source lookup has to run for either override on its own.
+  if (id && (settings.cronModel || settings.cronEffort)) {
     try {
       const database = new DatabaseSync(CODEX_STATE_DATABASE_PATH, { readOnly: true });
       const row = database.prepare("select thread_source from threads where id = ? limit 1").get(id);
       database.close();
       if (row?.thread_source === "automation") {
-        selectedModel = settings.cronModel;
+        if (settings.cronModel) selectedModel = settings.cronModel;
         selectedEffort = settings.cronEffort || selectedEffort;
       }
     } catch {}
@@ -268,10 +300,16 @@ export function synchronizedPayload(payload, { bypass = false, threadId } = {}) 
     });
   }
   const nextPayload = incomingModel === selectedModel ? payload : { ...payload, model: selectedModel };
+  // Same contract as the subagent-effort override in the router: the Responses
+  // API carries the level inside `reasoning`, and LiteLLM re-derives its own
+  // flat value from that object whenever the client sent one -- which Codex
+  // always does. Setting only the flat field would be discarded; setting only
+  // the nested one leaves a bare chat-completions gateway with nothing to read.
   return selectedEffort && typeof nextPayload === "object"
     ? {
       ...nextPayload,
       reasoning: { ...(nextPayload.reasoning || {}), effort: selectedEffort },
+      reasoning_effort: selectedEffort,
     }
     : nextPayload;
 }

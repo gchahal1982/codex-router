@@ -38,6 +38,10 @@ const SERVICE_COMMANDS = ["status", "start"];
 const TRAY_COMMANDS = ["enable", "disable", "status", "restart"];
 const SUBAGENT_MODES = ["all", "selected", "proven"];
 const EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max", "ultra", "default"];
+// The global chat and cron defaults accept the full published ladder plus
+// `default`, which clears the override and leaves each task's own effort alone.
+// `none` is a real rung for a routed model; the vision bridge has no use for it.
+const DEFAULT_EFFORTS = ["default", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 const LOCAL_RUNTIME_COMMANDS = ["start", "update"];
 const RETENTION_MIN_TTL_DAYS = 1;
 const RETENTION_MAX_TTL_DAYS = 3_650;
@@ -1130,12 +1134,12 @@ export function registerIpcHandlers({
     return snapshot();
   });
   handleAction("setChatDefaultEffort", async ({ effort } = {}) => {
-    if (typeof effort !== "string" || !["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort)) throw new Error("Invalid chat reasoning effort.");
+    oneOf(effort, DEFAULT_EFFORTS, "Chat reasoning effort");
     await runControl(["model-sync", "chat-effort", effort], { timeoutMs: 60_000 });
     return snapshot();
   });
   handleAction("setCronDefaultEffort", async ({ effort } = {}) => {
-    if (typeof effort !== "string" || !["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort)) throw new Error("Invalid scheduled-task reasoning effort.");
+    oneOf(effort, DEFAULT_EFFORTS, "Scheduled-task reasoning effort");
     await runControl(["model-sync", "cron-effort", effort], { timeoutMs: 60_000 });
     return snapshot();
   });

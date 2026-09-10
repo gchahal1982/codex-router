@@ -3,7 +3,7 @@ import { AppWindow, Eye, Moon, RefreshCw, Server, Sun, Wrench } from "lucide-rea
 import { Badge, Button, Dialog, InlineNotice, PageHeader, SectionHeading, Toggle } from "../components";
 import { compactNumber } from "../lib";
 import { LANGUAGE_OPTIONS, type LanguageId, type Translate } from "../i18n";
-import type { ChatGptSessionStatus, DoctorSnapshot, PresenceSnapshot, RouterControlApi, RouterHealth, RouterTarget, VisionEngine } from "../types";
+import type { ChatGptSessionStatus, DoctorSnapshot, PresenceSnapshot, RouterControlApi, RouterHealth, RouterModel, RouterTarget, VisionEngine } from "../types";
 import { useOptimisticValues, type RunAction } from "../useOptimisticValues";
 
 // Mirrors RETENTION_MIN/MAX/DEFAULT_TTL_DAYS in src/tool-result-retention.mjs.
@@ -119,7 +119,21 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
 
   const bridge = target?.modelSettings?.visionBridge;
   const modelSync = target?.modelSettings?.modelSync;
-  const defaultModels = [...(target?.models || []).filter((model) => model.enabled && model.available !== false), { slug: "gpt-reserve", displayName: "GPT reserve", enabled: true, available: true } as any].filter((model, index, all) => all.findIndex((item) => item.slug === model.slug) === index);
+  // `gpt-reserve` is the reserve alias the router resolves per request, not a
+  // catalog entry, so it never arrives in `target.models`. Both defaults still
+  // have to be able to name it; the dedupe lets a real catalog entry win if the
+  // slug is ever published for real.
+  const reserveModel: RouterModel = {
+    slug: "gpt-reserve",
+    displayName: "GPT reserve",
+    provider: "openai",
+    enabled: true,
+    visible: true,
+  };
+  const defaultModels = [
+    ...(target?.models || []).filter((model) => model.enabled && model.available !== false),
+    reserveModel,
+  ].filter((model, index, all) => all.findIndex((item) => item.slug === model.slug) === index);
   const defaultEffortOptions = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
   const toggleStates = useMemo(() => new Map([
     ["signed-routing", target?.signedRouting === true],
@@ -173,7 +187,13 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
                   {defaultModels.map((model) => <option key={model.slug} value={model.slug}>{model.displayName || model.slug}</option>)}
                 </select>
               </div>
-              <div className="setting-row"><div><strong>Chat reasoning effort</strong><small>Default effort for all interactive chats.</small></div><select value={modelSync?.chatEffort || "medium"} disabled={!api || !modelSync?.enabled} onChange={(e) => api && void runAction("Change chat reasoning effort", () => api.setChatDefaultEffort(e.target.value))}>{defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}</select></div>
+              <div className="setting-row">
+                <div><strong>{t("settings.chatEffort.title")}</strong><small>{t("settings.chatEffort.detail")}</small></div>
+                <select aria-label={t("settings.chatEffort.title")} value={modelSync?.chatEffort || "default"} disabled={!api || !modelSync?.enabled} onChange={(event) => api && void runAction("Change chat reasoning effort", () => api.setChatDefaultEffort(event.target.value))}>
+                  <option value="default">{t("settings.effort.perTask")}</option>
+                  {defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+                </select>
+              </div>
               <div className="setting-row">
                 <div><strong>{t("settings.cronDefault.title")}</strong><small>{t("settings.cronDefault.detail")}</small></div>
                 <select aria-label={t("settings.cronDefault.title")} value={modelSync?.cronModel || modelSync?.selectedModel || ""} disabled={!api || !modelSync?.enabled} onChange={(event) => api && void runAction("Change scheduled-task default model", () => api.setCronDefaultModel(event.target.value))}>
@@ -181,7 +201,13 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
                   {defaultModels.map((model) => <option key={model.slug} value={model.slug}>{model.displayName || model.slug}</option>)}
                 </select>
               </div>
-              <div className="setting-row"><div><strong>Scheduled-task reasoning effort</strong><small>Default effort for cron and automation runs.</small></div><select value={modelSync?.cronEffort || modelSync?.chatEffort || "medium"} disabled={!api || !modelSync?.enabled} onChange={(e) => api && void runAction("Change scheduled-task reasoning effort", () => api.setCronDefaultEffort(e.target.value))}>{defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}</select></div>
+              <div className="setting-row">
+                <div><strong>{t("settings.cronEffort.title")}</strong><small>{t("settings.cronEffort.detail")}</small></div>
+                <select aria-label={t("settings.cronEffort.title")} value={modelSync?.cronEffort || "default"} disabled={!api || !modelSync?.enabled} onChange={(event) => api && void runAction("Change scheduled-task reasoning effort", () => api.setCronDefaultEffort(event.target.value))}>
+                  <option value="default">{t("settings.effort.useChat")}</option>
+                  {defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+                </select>
+              </div>
               <div className="setting-row">
                 <div>
                   <strong>{t("settings.modelSync.title")}</strong>
