@@ -268,3 +268,40 @@ export function persistReserveCache(snapshot) {
   );
   return snapshot;
 }
+
+let reserveProbe;
+
+// Reserve availability drives rotation, and rotation reads a cache rather than
+// probing inside a request. Without something refreshing that cache it goes stale
+// within minutes and stops influencing anything -- the feature silently stops
+// working. Refreshed on the same cadence as its own freshness window.
+//
+// Only runs when the operator turned reserve rotation on and named accounts, so
+// an install that never opted in makes no authenticated calls at all.
+export function startChatGptReserveProbe({
+  intervalMs = RESERVE_CACHE_MAX_AGE_MS / 2,
+  listAccountIds,
+} = {}) {
+  if (reserveProbe || discoveryDisabled()) return reserveProbe;
+  const run = async () => {
+    try {
+      const settings = readReserveSettings();
+      if (!settings.enabled || !settings.accounts.length) return;
+      // Configured accounts only. Probing every login on a timer would spend
+      // authenticated requests on accounts the operator excluded on purpose.
+      const ids = typeof listAccountIds === "function"
+        ? listAccountIds().filter((id) => settings.accounts.includes(id))
+        : settings.accounts;
+      if (!ids.length) return;
+      persistReserveCache(await discoverReserveAccounts({ accountIds: ids }));
+    } catch (error) {
+      console.error(
+        `[codex-router] chatgpt reserve probe failed: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  };
+  reserveProbe = setInterval(() => { void run(); }, intervalMs);
+  reserveProbe.unref?.();
+  void run();
+  return reserveProbe;
+}

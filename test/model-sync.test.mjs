@@ -324,3 +324,26 @@ test("a routed model is never moved onto native ChatGPT by a default", async () 
   // The watcher records long-standing routed threads too, not only changed ones.
   assert.equal(module.refreshModelSyncFromCodex().pinnedThreadCount, 1);
 });
+
+test("the flat reasoning_effort field is never sent to native ChatGPT", async () => {
+  resetFixture();
+  writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
+  setThreadModel("fresh", "gpt-5.6-sol");
+  module.setModelSyncEnabled(true);
+  module.setModelSyncEfforts({ chatEffort: "medium" });
+
+  // ChatGPT's endpoint answers `{"detail":"Unsupported parameter:
+  // reasoning_effort"}` and fails the turn, so a native target gets the nested
+  // Responses field only.
+  module.setModelSyncDefaults({ chatModel: "gpt-5.6-sol" });
+  const native = module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "fresh" });
+  assert.deepEqual(native, { model: "gpt-5.6-sol", reasoning: { effort: "medium" } });
+  assert.ok(!("reasoning_effort" in native), "the flat field would fail the request");
+
+  // A routed target still needs both: LiteLLM re-derives its flat value from the
+  // nested object, so a flat-only override never reaches the provider.
+  module.setModelSyncDefaults({ chatModel: "kiro-prism/gpt-5.6-sol" });
+  const routed = module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "fresh" });
+  assert.equal(routed.reasoning_effort, "medium");
+  assert.deepEqual(routed.reasoning, { effort: "medium" });
+});

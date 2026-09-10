@@ -401,16 +401,22 @@ export function synchronizedPayload(payload, { bypass = false, threadId } = {}) 
   // rejected, wearing a different field name.
   if (pinnedNow) return payload;
   const nextPayload = incomingModel === selectedModel ? payload : { ...payload, model: selectedModel };
-  // Same contract as the subagent-effort override in the router: the Responses
-  // API carries the level inside `reasoning`, and LiteLLM re-derives its own
-  // flat value from that object whenever the client sent one -- which Codex
-  // always does. Setting only the flat field would be discarded; setting only
-  // the nested one leaves a bare chat-completions gateway with nothing to read.
-  return selectedEffort && typeof nextPayload === "object"
-    ? {
-      ...nextPayload,
-      reasoning: { ...(nextPayload.reasoning || {}), effort: selectedEffort },
-      reasoning_effort: selectedEffort,
-    }
-    : nextPayload;
+  if (!selectedEffort || typeof nextPayload !== "object") return nextPayload;
+  // `reasoning.effort` is the Responses field and is what actually travels.
+  //
+  // The flat `reasoning_effort` beside it is a Chat Completions field, added only
+  // for a routed target: LiteLLM re-derives its own flat value from the nested
+  // object whenever the client sent one -- which Codex always does -- so a
+  // flat-only override never reaches the provider, while a bare
+  // chat-completions gateway reads nothing else.
+  //
+  // ChatGPT's own endpoint rejects the flat field outright:
+  // `{"detail":"Unsupported parameter: reasoning_effort"}`, which fails the turn
+  // rather than being ignored. So it is never sent on a native target.
+  const effortPayload = {
+    ...nextPayload,
+    reasoning: { ...(nextPayload.reasoning || {}), effort: selectedEffort },
+  };
+  if (isRoutedSlug(selectedModel)) effortPayload.reasoning_effort = selectedEffort;
+  return effortPayload;
 }

@@ -73,7 +73,11 @@ import { readNativeAliases } from "./native-alias.mjs";
 import { nativeContextVariantBase } from "./native-context-variants.mjs";
 import { readNativeRedirect } from "./native-redirect.mjs";
 import { isAutomationThread, startModelSyncWatcher, synchronizedPayload } from "./model-sync.mjs";
-import { readReserveSettings, reserveByIdFromCache } from "./chatgpt-reserve.mjs";
+import {
+  readReserveSettings,
+  reserveByIdFromCache,
+  startChatGptReserveProbe,
+} from "./chatgpt-reserve.mjs";
 import {
   followOperatorModel,
   isNativeOpenAIRoute,
@@ -4837,6 +4841,7 @@ applyKeepAliveTimeouts(server);
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   console.error("[codex-router] listening");
   startChatGptLeftoverProbe();
+  startChatGptReserveProbe();
 });
 
 installGracefulShutdown(server, { label: "codex-router" });

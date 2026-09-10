@@ -186,3 +186,27 @@ test("a drained account holding reserve outranks one that is drained outright", 
     ["pro_home", "pro_other", "plus_reserve"],
   );
 });
+
+test("the probe refreshes the cache so rotation keeps seeing reserve", async () => {
+  // Rotation reads a cache with a freshness window. Nothing refreshing it means
+  // reserve stops influencing routing minutes after the last manual scan.
+  writeAccount("chatgpt_probe");
+  reserve.setReserveSettings({ accounts: ["chatgpt_probe"], enabled: true });
+
+  let calls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return { ok: true, json: async () => reservePayload() };
+  };
+  try {
+    const timer = reserve.startChatGptReserveProbe({ intervalMs: 60_000 });
+    // The first run is immediate, so the cache is warm without waiting an interval.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.ok(calls >= 1, "probes on start rather than only after one interval");
+    assert.equal(reserve.reserveByIdFromCache().get("chatgpt_probe")?.allowed, true);
+    clearInterval(timer);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
