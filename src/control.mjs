@@ -231,6 +231,8 @@ async function emitProbe() {
   const visibleModels = new Set(picker.visible);
   const subagentSettings = subagentSettingsSnapshot();
   const { modelSyncSnapshot } = await import("./model-sync.mjs");
+  const { readFailoverSettings: readFailoverForSnapshot } =
+    await import("./model-failover.mjs");
   const usageEvents = TARGET === "codex"
     ? (await import("./usage-events.mjs")).recentUsageEvents()
     : [];
@@ -318,6 +320,7 @@ async function emitProbe() {
             nativeAliases: readNativeAliases(),
             modelSettings: {
               modelSync: modelSyncSnapshot(),
+              failover: readFailoverForSnapshot(),
               subagents: subagentSettings,
               picker: modelPickerSnapshot(),
               toolResultAging: toolResultAgingSnapshot(),
@@ -1697,6 +1700,7 @@ async function handleFailover(action, ...rest) {
     readProviderCooldowns,
     setFailoverChain,
     setFailoverEnabled,
+    setNativeTakeover,
   } = await import("./model-failover.mjs");
   const snapshot = () => ({
     ...readFailoverSettings(),
@@ -1713,13 +1717,32 @@ async function handleFailover(action, ...rest) {
     setFailoverChain(rest);
   } else if (desired === "auto") {
     setFailoverChain([]);
+  } else if (desired === "takeover") {
+    // `takeover <model>` names the destination and turns it on in one step,
+    // `takeover off` stands it down, and the effort verbs set the two depths.
+    const [value, ...extra] = rest;
+    const argument = String(value || "").trim();
+    if (!argument) {
+      throw new Error(
+        "Usage: control failover takeover <model-slug|off|effort EFFORT|cron-effort EFFORT>",
+      );
+    }
+    if (argument === "off") setNativeTakeover({ enabled: false });
+    else if (argument === "effort" || argument === "cron-effort") {
+      const level = String(extra[0] || "").trim();
+      if (!level) throw new Error(`Usage: control failover takeover ${argument} EFFORT`);
+      setNativeTakeover(
+        argument === "effort" ? { effort: level } : { cronEffort: level },
+      );
+    } else setNativeTakeover({ enabled: true, model: argument });
   } else if (desired === "reset") {
     // Every recorded window at once. A provider is asked again on the very
     // next turn, and answers for itself.
     clearAllProviderCooldowns();
   } else {
     throw new Error(
-      "Usage: control failover status|on|off|chain <model-slug,...>|auto|reset",
+      "Usage: control failover status|on|off|chain <model-slug,...>|auto|reset|" +
+        "takeover <model-slug|off|effort EFFORT|cron-effort EFFORT>",
     );
   }
   process.stdout.write(`${JSON.stringify(snapshot(), null, 2)}\n`);

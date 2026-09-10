@@ -1143,6 +1143,27 @@ export function registerIpcHandlers({
     await runControl(["model-sync", "cron-effort", effort], { timeoutMs: 60_000 });
     return snapshot();
   });
+  handleAction("setNativeTakeoverModel", async ({ slug } = {}) => {
+    // An empty slug stands the takeover down, which is how the renderer offers
+    // "off" in the same select that names the model.
+    if (slug === "" || slug === undefined || slug === null) {
+      await runControl(["failover", "takeover", "off"], { timeoutMs: 60_000 });
+      return snapshot();
+    }
+    const model = await validateModel(slug);
+    await runControl(["failover", "takeover", model], { timeoutMs: 60_000 });
+    return snapshot();
+  });
+  handleAction("setNativeTakeoverEffort", async ({ effort } = {}) => {
+    oneOf(effort, DEFAULT_EFFORTS, "Takeover reasoning effort");
+    await runControl(["failover", "takeover", "effort", effort], { timeoutMs: 60_000 });
+    return snapshot();
+  });
+  handleAction("setNativeTakeoverCronEffort", async ({ effort } = {}) => {
+    oneOf(effort, DEFAULT_EFFORTS, "Takeover reasoning effort");
+    await runControl(["failover", "takeover", "cron-effort", effort], { timeoutMs: 60_000 });
+    return snapshot();
+  });
   handleAction("setChatGptSessionSharing", async ({ enabled } = {}) => {
     if (typeof enabled !== "boolean") throw new Error("enabled must be boolean.");
     // Renderer input selects one of two fixed control verbs. The upstream

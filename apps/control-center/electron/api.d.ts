@@ -135,6 +135,9 @@ export interface RouterControl {
   setCronDefaultModel(slug: string): Promise<unknown>;
   setChatDefaultEffort(effort: string): Promise<unknown>;
   setCronDefaultEffort(effort: string): Promise<unknown>;
+  setNativeTakeoverModel(slug: string): Promise<unknown>;
+  setNativeTakeoverEffort(effort: string): Promise<unknown>;
+  setNativeTakeoverCronEffort(effort: string): Promise<unknown>;
   setChatGptSessionSharing(enabled: boolean): Promise<ChatGptSessionStatus>;
   setPresence(mode: PresenceMode): Promise<unknown>;
   controlService(action: ServiceAction): Promise<unknown>;

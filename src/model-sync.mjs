@@ -20,7 +20,7 @@ import {
 const RECENT_MODELS_KEY = "composer-recent-model-configurations-v1";
 // The published effort ladder, plus the sentinel that clears the override so
 // each task keeps whatever effort it was created with.
-const EFFORT_LEVELS = Object.freeze([
+export const EFFORT_LEVELS = Object.freeze([
   "none",
   "minimal",
   "low",
@@ -59,6 +59,13 @@ function readSettings() {
       // off-ladder value edited in by hand is dropped rather than forwarded.
       chatEffort: EFFORT_LEVELS.includes(parsed.chatEffort) ? parsed.chatEffort : undefined,
       cronEffort: EFFORT_LEVELS.includes(parsed.cronEffort) ? parsed.cronEffort : undefined,
+      // Threads whose own picker the operator moved after synchronization was
+      // enabled. Those threads keep what they were pointed at, and the global
+      // defaults stop applying to them.
+      pinnedThreads: parsed.pinnedThreads && typeof parsed.pinnedThreads === "object"
+        && !Array.isArray(parsed.pinnedThreads)
+        ? parsed.pinnedThreads
+        : {},
       observedModels: parsed.observedModels && typeof parsed.observedModels === "object"
         ? parsed.observedModels
         : {},
@@ -93,12 +100,22 @@ function readObservedThreadModels() {
   return Object.fromEntries(readObservedThreadRows().map((row) => [row.id, row.model]));
 }
 
+// Every mutation routes through here, and a thread the operator pinned has to
+// survive all of them: changing an effort default or absorbing a picker refresh
+// has no business discarding per-thread choices. A caller that means to reset
+// the pins passes its own `pinnedThreads`.
 function writeSettings(settings) {
   const directory = path.dirname(MODEL_SYNC_PATH);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   chmodSync(directory, 0o700);
   const temporary = `${MODEL_SYNC_PATH}.tmp.${process.pid}`;
-  writeFileSync(temporary, `${JSON.stringify({ version: 2, ...settings }, null, 2)}\n`, {
+  const pinnedThreads = settings.pinnedThreads ?? readSettings().pinnedThreads;
+  const document = {
+    version: 2,
+    ...settings,
+    ...(pinnedThreads && Object.keys(pinnedThreads).length ? { pinnedThreads } : {}),
+  };
+  writeFileSync(temporary, `${JSON.stringify(document, null, 2)}\n`, {
     encoding: "utf8",
     mode: 0o600,
   });
@@ -145,6 +162,12 @@ export function modelSyncSnapshot() {
     ...(settings.chatEffort ? { chatEffort: settings.chatEffort } : {}),
     ...(settings.cronEffort ? { cronEffort: settings.cronEffort } : {}),
     ...(selection?.reasoningEffort ? { reasoningEffort: selection.reasoningEffort } : {}),
+    // A count, not the map: the operator wants to know that some windows are
+    // running their own model, and the thread ids themselves are not useful in
+    // a status line.
+    ...(Object.keys(settings.pinnedThreads || {}).length
+      ? { pinnedThreadCount: Object.keys(settings.pinnedThreads).length }
+      : {}),
     path: MODEL_SYNC_PATH,
   };
 }
@@ -201,26 +224,27 @@ export function refreshModelSyncFromCodex() {
   const rows = readObservedThreadRows();
   const observedModels = Object.fromEntries(rows.map((row) => [row.id, row.model]));
   const changed = rows
-    .filter((row) => settings.observedModels[row.id] && settings.observedModels[row.id] !== row.model)
-    .sort((left, right) => right.updatedAt - left.updatedAt);
+    .filter((row) => settings.observedModels[row.id] && settings.observedModels[row.id] !== row.model);
   const inventoryChanged = Object.keys(observedModels).length !== Object.keys(settings.observedModels).length;
   if (!changed.length && !inventoryChanged) return modelSyncSnapshot();
-  const selectedModel = changed[0]?.model || settings.selectedModel;
+  // A thread whose picker moved is pinned to its own choice rather than
+  // redefining the global default. The operator sets the defaults in one place
+  // -- the Control Center -- so a single window changing its model must not
+  // quietly repoint every other window and scheduled task.
+  const pinnedThreads = { ...settings.pinnedThreads };
+  for (const row of changed) {
+    const globalModel = settings.chatModel || settings.selectedModel;
+    if (row.model === globalModel) delete pinnedThreads[row.id];
+    else pinnedThreads[row.id] = row.model;
+  }
   writeSettings({
     enabled: true,
-    selectedModel,
-    ...(settings.chatModel ? {
-      chatModel: changed.length && settings.chatModel === settings.selectedModel
-        ? selectedModel
-        : settings.chatModel,
-    } : {}),
-    ...(settings.cronModel ? {
-      cronModel: changed.length && settings.cronModel === settings.selectedModel
-        ? selectedModel
-        : settings.cronModel,
-    } : {}),
+    selectedModel: settings.selectedModel,
+    ...(settings.chatModel ? { chatModel: settings.chatModel } : {}),
+    ...(settings.cronModel ? { cronModel: settings.cronModel } : {}),
     ...(settings.chatEffort ? { chatEffort: settings.chatEffort } : {}),
     ...(settings.cronEffort ? { cronEffort: settings.cronEffort } : {}),
+    pinnedThreads,
     observedModels,
   });
   return modelSyncSnapshot();
@@ -236,6 +260,25 @@ export function startModelSyncWatcher({ intervalMs = 500 } = {}) {
   }, intervalMs);
   timer.unref?.();
   return () => clearInterval(timer);
+}
+
+// Whether a thread is a cron/automation run rather than an interactive window.
+// Both the global defaults and the native-takeover effort split need this, and
+// an unreadable database means "not an automation": treating an ordinary chat as
+// a scheduled task would apply the wrong depth to the visible one.
+export function isAutomationThread(threadId) {
+  const id = typeof threadId === "string" ? threadId.trim() : "";
+  if (!id) return false;
+  let database;
+  try {
+    database = new DatabaseSync(CODEX_STATE_DATABASE_PATH, { readOnly: true });
+    const row = database.prepare("select thread_source from threads where id = ? limit 1").get(id);
+    return row?.thread_source === "automation";
+  } catch {
+    return false;
+  } finally {
+    database?.close();
+  }
 }
 
 // The router is the one common execution point for every Codex window and for
@@ -254,51 +297,42 @@ export function synchronizedPayload(payload, { bypass = false, threadId } = {}) 
   let selectedEffort = settings.chatEffort;
   // An operator can override the automation effort without overriding its model,
   // so the thread-source lookup has to run for either override on its own.
-  if (id && (settings.cronModel || settings.cronEffort)) {
-    try {
-      const database = new DatabaseSync(CODEX_STATE_DATABASE_PATH, { readOnly: true });
-      const row = database.prepare("select thread_source from threads where id = ? limit 1").get(id);
-      database.close();
-      if (row?.thread_source === "automation") {
-        if (settings.cronModel) selectedModel = settings.cronModel;
-        selectedEffort = settings.cronEffort || selectedEffort;
-      }
-    } catch {}
+  if (id && (settings.cronModel || settings.cronEffort) && isAutomationThread(id)) {
+    if (settings.cronModel) selectedModel = settings.cronModel;
+    selectedEffort = settings.cronEffort || selectedEffort;
   }
   if (!selectedModel || !incomingModel) return payload;
 
   const observedModel = id ? settings.observedModels[id] : undefined;
-  if (id && observedModel && observedModel !== incomingModel) {
-    // The app changed this thread's persisted model since synchronization was
-    // enabled. That is the reliable picker event; ordinary turns keep sending
-    // the same per-thread value and must not steal the global selection back.
-    selectedModel = incomingModel;
+  const wasPinned = Boolean(id && settings.pinnedThreads[id]);
+  // A thread that names a model other than the global default is running on its
+  // own choice. That is true whether the operator just moved the dropdown or
+  // moved it several turns ago, so one rule covers both: the thread is pinned
+  // while it disagrees with the default, and released the moment it agrees
+  // again. Nothing here rewrites the defaults -- those are set in one place.
+  const pinnedNow = Boolean(id) && incomingModel !== selectedModel &&
+    (wasPinned || Boolean(observedModel && observedModel !== incomingModel));
+  const pinnedThreads = { ...settings.pinnedThreads };
+  if (pinnedNow) pinnedThreads[id] = incomingModel;
+  else if (id) delete pinnedThreads[id];
+  const pinChanged = pinnedNow !== wasPinned ||
+    (pinnedNow && settings.pinnedThreads[id] !== incomingModel);
+  if (id && (pinChanged || !observedModel || observedModel !== incomingModel)) {
     writeSettings({
       enabled: true,
-      selectedModel,
-      ...(settings.chatModel ? {
-        chatModel: settings.chatModel === settings.selectedModel ? selectedModel : settings.chatModel,
-      } : {}),
-      ...(settings.cronModel ? {
-        cronModel: settings.cronModel === settings.selectedModel ? selectedModel : settings.cronModel,
-      } : {}),
-      ...(settings.chatEffort ? { chatEffort: settings.chatEffort } : {}),
-      ...(settings.cronEffort ? { cronEffort: settings.cronEffort } : {}),
-      observedModels: { ...settings.observedModels, [id]: incomingModel },
-    });
-    return payload;
-  }
-  if (id && !observedModel) {
-    writeSettings({
-      enabled: true,
-      selectedModel,
+      selectedModel: settings.selectedModel,
       ...(settings.chatModel ? { chatModel: settings.chatModel } : {}),
       ...(settings.cronModel ? { cronModel: settings.cronModel } : {}),
       ...(settings.chatEffort ? { chatEffort: settings.chatEffort } : {}),
       ...(settings.cronEffort ? { cronEffort: settings.cronEffort } : {}),
+      pinnedThreads,
       observedModels: { ...settings.observedModels, [id]: incomingModel },
     });
   }
+  // Its own model means its own effort: forcing the default level onto a thread
+  // the operator deliberately moved would be the same override they just
+  // rejected, wearing a different field name.
+  if (pinnedNow) return payload;
   const nextPayload = incomingModel === selectedModel ? payload : { ...payload, model: selectedModel };
   // Same contract as the subagent-effort override in the router: the Responses
   // API carries the level inside `reasoning`, and LiteLLM re-derives its own

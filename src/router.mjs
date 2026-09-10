@@ -72,7 +72,7 @@ import { discoveryDisabled } from "./discovery-mode.mjs";
 import { readNativeAliases } from "./native-alias.mjs";
 import { nativeContextVariantBase } from "./native-context-variants.mjs";
 import { readNativeRedirect } from "./native-redirect.mjs";
-import { startModelSyncWatcher, synchronizedPayload } from "./model-sync.mjs";
+import { isAutomationThread, startModelSyncWatcher, synchronizedPayload } from "./model-sync.mjs";
 import {
   followOperatorModel,
   isNativeOpenAIRoute,
@@ -3717,6 +3717,111 @@ async function handleResponses(request, response, requestUrl) {
           upstream = moved.upstream;
           upstreamStatus = upstream.status;
           failedBodyText = undefined;
+        }
+      }
+    }
+    // The signed-in ChatGPT plan ran out. Codex has nothing to do with a
+    // billing error, so this turn used to simply end -- the native path never
+    // reached the failover above, which only ever covered routed providers.
+    //
+    // Opt-in, and deliberately narrower than the routed chain: a ChatGPT
+    // subscription is flat-rate and already paid for, so silently continuing on
+    // a metered provider would spend money the operator did not choose to
+    // spend. One named destination, off unless configured.
+    if (!route && !upstream.ok && !exactRouteProbe) {
+      const takeover = readFailoverSettings();
+      const takeoverRoute = takeover.enabled && takeover.nativeTakeover
+        ? MODEL_BY_SLUG.get(takeover.nativeTakeoverModel)
+        : undefined;
+      // Read from a clone. The native failure is relayed verbatim when the
+      // takeover does not happen, and a body can only be consumed once.
+      const nativeBody = takeoverRoute
+        ? await boundedResponseText(upstream.clone(), MAX_BUFFERED_RESPONSE_BYTES, controller.signal)
+          .catch(() => "")
+        : undefined;
+      const verdict = takeoverRoute
+        ? classifyRoutedFailure({
+            status: upstream.status,
+            bodyText: nativeBody,
+            retryAfterSeconds: Number(upstream.headers.get("retry-after")),
+          })
+        : { swap: false };
+      if (
+        takeoverRoute &&
+        verdict.swap &&
+        readProviderSelection().includes(takeoverRoute.provider) &&
+        nothingRelayed(response)
+      ) {
+        // Automations and chats can be pointed at different depths, the same
+        // split the global defaults use.
+        const effort = isAutomationThread(threadIdFromHeaders(request.headers))
+          ? takeover.nativeTakeoverCronEffort || takeover.nativeTakeoverEffort
+          : takeover.nativeTakeoverEffort;
+        const takeoverPayload = effort
+          ? {
+            ...payload,
+            reasoning: { ...(payload.reasoning || {}), effort },
+            reasoning_effort: effort,
+          }
+          : payload;
+        let moved;
+        try {
+          moved = await prepareRoutedRequest({
+            request,
+            payload: takeoverPayload,
+            route: takeoverRoute,
+            normalizedInput,
+            agingEnabled,
+          });
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+          logFailover(undefined, takeoverRoute, verdict.reason, upstream.status, "prepare-failed");
+        }
+        if (moved && routedRequestFits(takeoverRoute, moved.body)) {
+          let takeoverUpstream;
+          try {
+            takeoverUpstream = await fetch(moved.target, {
+              method: "POST",
+              headers: moved.headers,
+              body: moved.body,
+              signal: controller.signal,
+            });
+          } catch (error) {
+            if (controller.signal.aborted) throw error;
+            logFailover(
+              undefined,
+              takeoverRoute,
+              verdict.reason,
+              upstream.status,
+              `transport/${error?.name || "Error"}`,
+            );
+          }
+          if (takeoverUpstream?.ok) {
+            logFailover(undefined, takeoverRoute, verdict.reason, upstream.status, takeoverUpstream.status);
+            recordUsageEvent({
+              model: requestedModel,
+              provider: "openai",
+              status: upstream.status,
+              durationMs: Date.now() - startedAt,
+              responseStartMs: upstreamLatencyMs,
+            });
+            adoptRoute(takeoverRoute, moved);
+            upstream = takeoverUpstream;
+            upstreamStatus = upstream.status;
+          } else if (takeoverUpstream) {
+            // The takeover failed too. Relay the original native failure: it is
+            // the one the operator can act on.
+            await takeoverUpstream.body?.cancel().catch(() => undefined);
+            logFailover(
+              undefined,
+              takeoverRoute,
+              verdict.reason,
+              upstream.status,
+              takeoverUpstream.status,
+            );
+          }
+        } else if (moved) {
+          logFailover(undefined, takeoverRoute, verdict.reason, upstream.status, "context-too-small");
         }
       }
     }

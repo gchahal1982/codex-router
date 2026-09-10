@@ -35,6 +35,8 @@ export interface RouterModel {
   autoCompact?: number;
   inputModalities?: string[];
   isFree?: boolean;
+  /** Registry preference order; lower sorts first. */
+  priority?: number;
   /** False only for a checked-in research route that is not currently routable. */
   available?: boolean;
 }
@@ -241,7 +243,16 @@ export interface RouterTarget {
       chatEffort?: string;
       cronEffort?: string;
       reasoningEffort?: string;
+      pinnedThreadCount?: number;
       path?: string;
+    };
+    failover?: {
+      enabled: boolean;
+      chain: string[];
+      nativeTakeover?: boolean;
+      nativeTakeoverModel?: string;
+      nativeTakeoverEffort?: string;
+      nativeTakeoverCronEffort?: string;
     };
     subagents: SubagentSettings;
     picker: { hidden: string[]; visible?: string[]; hasExplicitVisibility?: boolean; path?: string };
@@ -773,6 +784,9 @@ export interface RouterControlApi {
   setCronDefaultModel(slug: string): Promise<unknown>;
   setChatDefaultEffort(effort: string): Promise<unknown>;
   setCronDefaultEffort(effort: string): Promise<unknown>;
+  setNativeTakeoverModel(slug: string): Promise<unknown>;
+  setNativeTakeoverEffort(effort: string): Promise<unknown>;
+  setNativeTakeoverCronEffort(effort: string): Promise<unknown>;
   setChatGptSessionSharing(enabled: boolean): Promise<ChatGptSessionStatus>;
   setPresence(mode: "always" | "follow-codex"): Promise<PresenceSnapshot>;
   controlService(action: "status" | "start"): Promise<unknown>;

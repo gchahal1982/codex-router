@@ -60,14 +60,26 @@ test("model sync is opt-in and follows the newest desktop picker selection", asy
   assert.deepEqual(first.reasoning, { effort: "low" }, "per-task reasoning is preserved");
   assert.equal(original.model, "gpt-5-codex", "the caller payload is not mutated");
 
+  // Moving one thread's picker is a statement about that thread. It keeps its
+  // own model, and every other window stays on the global default.
   setThreadModel("one", "deepseek/deepseek-v4-flash");
-  assert.equal(module.refreshModelSyncFromCodex().selectedModel, "deepseek/deepseek-v4-flash");
+  const refreshed = module.refreshModelSyncFromCodex();
+  assert.equal(refreshed.selectedModel, "gpt-5.6-sol", "the global default is untouched");
+  assert.equal(refreshed.pinnedThreadCount, 1);
   const selected = module.synchronizedPayload(
     { ...original, model: "deepseek/deepseek-v4-flash" },
     { threadId: "one" },
   );
-  assert.equal(selected.model, "deepseek/deepseek-v4-flash");
-  assert.equal(module.synchronizedPayload(original, { threadId: "two" }).model, "deepseek/deepseek-v4-flash");
+  assert.equal(selected.model, "deepseek/deepseek-v4-flash", "the pinned thread keeps its choice");
+  assert.equal(
+    module.synchronizedPayload(original, { threadId: "two" }).model,
+    "gpt-5.6-sol",
+    "an unpinned thread still follows the default",
+  );
+
+  // Returning the thread to the default releases the pin; no unpin step needed.
+  setThreadModel("one", "gpt-5.6-sol");
+  assert.equal(module.refreshModelSyncFromCodex().pinnedThreadCount, undefined);
 });
 
 test("exact-route probes bypass sync and damaged state fails closed", async () => {
@@ -163,4 +175,68 @@ test("default clears an effort override and off-ladder levels are refused", asyn
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "chat" }),
     { model: "gpt-5.6-sol" },
   );
+});
+
+test("a thread's own picker choice supersedes the global default", async () => {
+  resetFixture();
+  writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
+  setThreadModel("mine", "gpt-5.6-sol");
+  setThreadModel("other", "gpt-5.6-sol");
+  module.setModelSyncEnabled(true);
+  module.setModelSyncDefaults({ chatModel: "gpt-reserve" });
+  module.setModelSyncEfforts({ chatEffort: "high" });
+
+  // Both threads start on the global default, effort included.
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "mine" }),
+    { model: "gpt-reserve", reasoning: { effort: "high" }, reasoning_effort: "high" },
+  );
+
+  // The operator moves this one thread's dropdown. The router records the pin
+  // and stops overriding the thread, model and effort alike.
+  const pinned = module.synchronizedPayload(
+    { model: "deepseek/deepseek-v4-flash" },
+    { threadId: "mine" },
+  );
+  assert.deepEqual(pinned, { model: "deepseek/deepseek-v4-flash" });
+  assert.equal(module.modelSyncSnapshot().pinnedThreadCount, 1);
+
+  // Later turns in that thread keep its model and are never given the default
+  // effort back.
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "deepseek/deepseek-v4-flash" }, { threadId: "mine" }),
+    { model: "deepseek/deepseek-v4-flash" },
+  );
+
+  // The global default still governs every other window and the snapshot.
+  const snapshot = module.modelSyncSnapshot();
+  assert.equal(snapshot.chatModel, "gpt-reserve");
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "other" }),
+    { model: "gpt-reserve", reasoning: { effort: "high" }, reasoning_effort: "high" },
+  );
+
+  // Choosing the default again in that thread hands it back to the router.
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-reserve" }, { threadId: "mine" }),
+    { model: "gpt-reserve", reasoning: { effort: "high" }, reasoning_effort: "high" },
+  );
+  assert.equal(module.modelSyncSnapshot().pinnedThreadCount, undefined);
+});
+
+test("a new thread is adopted by the default rather than pinned", async () => {
+  resetFixture();
+  writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
+  setThreadModel("existing", "gpt-5.6-sol");
+  module.setModelSyncEnabled(true);
+  module.setModelSyncDefaults({ chatModel: "gpt-reserve" });
+
+  // A window Codex opened after sync was enabled has no observed history. It
+  // arrives on whatever Codex hardwired, which is not a picker decision, so the
+  // default applies and no pin is recorded.
+  assert.deepEqual(
+    module.synchronizedPayload({ model: "gpt-5-codex" }, { threadId: "fresh" }),
+    { model: "gpt-reserve" },
+  );
+  assert.equal(module.modelSyncSnapshot().pinnedThreadCount, undefined);
 });

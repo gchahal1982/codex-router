@@ -6,6 +6,7 @@ import { STATE_DIR } from "./paths.mjs";
 import { upstreamFailureKind } from "./error-translation.mjs";
 import { PROVIDERS } from "./model-registry.mjs";
 import { canonicalProviderId } from "./provider-selection.mjs";
+import { EFFORT_LEVELS } from "./model-sync.mjs";
 
 // Keeping a turn alive when the provider it was routed to has no usage left.
 //
@@ -242,6 +243,7 @@ export function readFailoverSettings() {
         chain: Array.isArray(parsed.chain)
           ? parsed.chain.map((slug) => String(slug).trim()).filter(Boolean)
           : [],
+        ...readNativeTakeover(parsed),
       };
     }
   } catch {
@@ -250,9 +252,91 @@ export function readFailoverSettings() {
   return unreadableSettings();
 }
 
+// Moving a turn off the signed-in ChatGPT plan is its own decision, kept apart
+// from the routed chain above. A ChatGPT subscription is flat-rate and already
+// paid for; the model that takes over may be metered, so this never turns
+// itself on and names exactly one destination the operator chose.
+function readNativeTakeover(parsed) {
+  const model = typeof parsed?.nativeTakeoverModel === "string"
+    ? parsed.nativeTakeoverModel.trim()
+    : "";
+  return {
+    nativeTakeover: parsed?.nativeTakeover === true && Boolean(model),
+    ...(model ? { nativeTakeoverModel: model } : {}),
+    ...(EFFORT_LEVELS.includes(parsed?.nativeTakeoverEffort)
+      ? { nativeTakeoverEffort: parsed.nativeTakeoverEffort }
+      : {}),
+    ...(EFFORT_LEVELS.includes(parsed?.nativeTakeoverCronEffort)
+      ? { nativeTakeoverCronEffort: parsed.nativeTakeoverCronEffort }
+      : {}),
+  };
+}
+
+// Carried through every mutation so toggling the routed chain cannot silently
+// drop the takeover the operator configured, and vice versa.
+function nativeTakeoverFields(settings) {
+  return {
+    ...(settings.nativeTakeover ? { nativeTakeover: true } : {}),
+    ...(settings.nativeTakeoverModel ? { nativeTakeoverModel: settings.nativeTakeoverModel } : {}),
+    ...(settings.nativeTakeoverEffort ? { nativeTakeoverEffort: settings.nativeTakeoverEffort } : {}),
+    ...(settings.nativeTakeoverCronEffort
+      ? { nativeTakeoverCronEffort: settings.nativeTakeoverCronEffort }
+      : {}),
+  };
+}
+
+// The takeover destination and its two effort levels. An empty model turns the
+// takeover off rather than leaving it enabled with nothing to point at, which
+// would be a setting that reads as on and does nothing.
+export function setNativeTakeover({ enabled, model, effort, cronEffort } = {}) {
+  const current = readFailoverSettings();
+  const next = {
+    version: 1,
+    enabled: current.enabled,
+    chain: current.chain,
+    ...nativeTakeoverFields(current),
+  };
+  if (model !== undefined) {
+    const slug = String(model || "").trim();
+    if (slug) next.nativeTakeoverModel = slug;
+    else {
+      delete next.nativeTakeoverModel;
+      delete next.nativeTakeover;
+    }
+  }
+  for (const [key, value] of [
+    ["nativeTakeoverEffort", effort],
+    ["nativeTakeoverCronEffort", cronEffort],
+  ]) {
+    if (value === undefined) continue;
+    const level = String(value).trim();
+    if (!level || level === "default") delete next[key];
+    else if (EFFORT_LEVELS.includes(level)) next[key] = level;
+    else {
+      throw new Error(
+        `Takeover reasoning effort must be one of: default, ${EFFORT_LEVELS.join(", ")}.`,
+      );
+    }
+  }
+  if (enabled !== undefined) {
+    if (enabled === true && !next.nativeTakeoverModel) {
+      throw new Error("Choose the model that takes over before enabling it.");
+    }
+    if (enabled === true) next.nativeTakeover = true;
+    else delete next.nativeTakeover;
+  }
+  writePrivateJson(FAILOVER_STATE_PATH, next, { directoryMode: 0o700 });
+  return readFailoverSettings();
+}
+
 export function setFailoverEnabled(enabled) {
   const current = readFailoverSettings();
-  const next = { version: 1, enabled: enabled === true, chain: current.chain };
+  const next = {
+    version: 1,
+    enabled: enabled === true,
+    chain: current.chain,
+    ...nativeTakeoverFields(current),
+  };
   writePrivateJson(FAILOVER_STATE_PATH, next, { directoryMode: 0o700 });
   return next;
 }
@@ -266,7 +350,12 @@ export function setFailoverChain(slugs) {
     .flatMap((value) => String(value).split(","))
     .map((value) => value.trim())
     .filter(Boolean);
-  const next = { version: 1, enabled: current.enabled, chain };
+  const next = {
+    version: 1,
+    enabled: current.enabled,
+    chain,
+    ...nativeTakeoverFields(current),
+  };
   writePrivateJson(FAILOVER_STATE_PATH, next, { directoryMode: 0o700 });
   return next;
 }

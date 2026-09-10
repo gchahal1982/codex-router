@@ -119,6 +119,7 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
 
   const bridge = target?.modelSettings?.visionBridge;
   const modelSync = target?.modelSettings?.modelSync;
+  const failover = target?.modelSettings?.failover;
   // `gpt-reserve` is the reserve alias the router resolves per request, not a
   // catalog entry, so it never arrives in `target.models`. Both defaults still
   // have to be able to name it; the dedupe lets a real catalog entry win if the
@@ -135,6 +136,18 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
     reserveModel,
   ].filter((model, index, all) => all.findIndex((item) => item.slug === model.slug) === index);
   const defaultEffortOptions = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
+  // Native models are excluded: the takeover exists because the signed-in
+  // ChatGPT plan is empty, and another model on that same plan cannot serve the
+  // turn either. Prism first, since that is the routed layer this install uses
+  // for GPT models, then the rest in their normal order.
+  const takeoverModels = (target?.models || [])
+    .filter((model) => model.enabled && model.available !== false && !model.native)
+    .sort((left, right) => {
+      const rank = (model: RouterModel) => (model.provider === "kiro-prism" ? 0 : 1);
+      return rank(left) - rank(right) ||
+        Number(left.priority ?? 999) - Number(right.priority ?? 999) ||
+        String(left.displayName || left.slug).localeCompare(String(right.displayName || right.slug));
+    });
   const toggleStates = useMemo(() => new Map([
     ["signed-routing", target?.signedRouting === true],
     ["model-sync", modelSync?.enabled === true],
@@ -204,6 +217,27 @@ export function SettingsPage({ target, health, presence, chatgptSession, api, th
               <div className="setting-row">
                 <div><strong>{t("settings.cronEffort.title")}</strong><small>{t("settings.cronEffort.detail")}</small></div>
                 <select aria-label={t("settings.cronEffort.title")} value={modelSync?.cronEffort || "default"} disabled={!api || !modelSync?.enabled} onChange={(event) => api && void runAction("Change scheduled-task reasoning effort", () => api.setCronDefaultEffort(event.target.value))}>
+                  <option value="default">{t("settings.effort.useChat")}</option>
+                  {defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+                </select>
+              </div>
+              <div className="setting-row">
+                <div><strong>{t("settings.takeover.title")}</strong><small>{t("settings.takeover.detail")}</small></div>
+                <select aria-label={t("settings.takeover.title")} value={failover?.nativeTakeover ? failover.nativeTakeoverModel || "" : ""} disabled={!api || !failover?.enabled} onChange={(event) => api && void runAction("Change usage takeover model", () => api.setNativeTakeoverModel(event.target.value))}>
+                  <option value="">{t("settings.takeover.off")}</option>
+                  {takeoverModels.map((model) => <option key={model.slug} value={model.slug}>{model.displayName || model.slug}</option>)}
+                </select>
+              </div>
+              <div className="setting-row">
+                <div><strong>{t("settings.takeoverEffort.title")}</strong><small>{t("settings.takeoverEffort.detail")}</small></div>
+                <select aria-label={t("settings.takeoverEffort.title")} value={failover?.nativeTakeoverEffort || "default"} disabled={!api || !failover?.nativeTakeover} onChange={(event) => api && void runAction("Change takeover reasoning effort", () => api.setNativeTakeoverEffort(event.target.value))}>
+                  <option value="default">{t("settings.effort.perTask")}</option>
+                  {defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+                </select>
+              </div>
+              <div className="setting-row">
+                <div><strong>{t("settings.takeoverCronEffort.title")}</strong><small>{t("settings.takeoverCronEffort.detail")}</small></div>
+                <select aria-label={t("settings.takeoverCronEffort.title")} value={failover?.nativeTakeoverCronEffort || "default"} disabled={!api || !failover?.nativeTakeover} onChange={(event) => api && void runAction("Change takeover effort for scheduled tasks", () => api.setNativeTakeoverCronEffort(event.target.value))}>
                   <option value="default">{t("settings.effort.useChat")}</option>
                   {defaultEffortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
                 </select>

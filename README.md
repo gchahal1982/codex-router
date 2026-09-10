@@ -981,6 +981,34 @@ request rather than a published catalog entry. An effort accepts `none`,
 `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`; `default` clears
 the override and leaves each task's own effort in place.
 
+**A single chat window outranks these defaults.** Changing the model in one
+task's own picker pins that task: it keeps the model you chose, keeps its own
+reasoning effort, and the global defaults stop applying to it. Every other window
+and scheduled task is untouched. Choosing the default again in that window hands
+it back to the router, so nothing has to be un-pinned by hand.
+
+### Continue on another model when ChatGPT usage runs out
+
+The signed-in ChatGPT plan is flat-rate, so a closed usage window used to end the
+turn outright: the failover below covers routed providers, and native traffic
+never reached it. Name a takeover model and the turn continues instead.
+
+It is off until you choose that model, because a ChatGPT subscription is already
+paid for while the model that takes over may be metered. Chats and scheduled
+tasks can run at different depths, the same split the defaults above use.
+
+```sh
+./bin/control failover takeover kiro-prism/gpt-5.6-sol
+./bin/control failover takeover effort high
+./bin/control failover takeover cron-effort medium
+./bin/control failover takeover off
+```
+
+Native models are never offered as the destination: the takeover exists because
+that plan is empty, and another model on the same plan cannot serve the turn
+either. If the takeover model also fails, the original ChatGPT usage error is
+reported rather than the second failure.
+
 The API-key prompt disables terminal echo. Protected files use mode `600` on
 POSIX and an inheritance-disabled, current-user ACL on Windows. Diagnostics
 report credential presence and source, never the value.

@@ -24,6 +24,7 @@ const {
   recordProviderCooldown,
   setFailoverChain,
   setFailoverEnabled,
+  setNativeTakeover,
 } = await import("../src/model-failover.mjs");
 
 const NOW = Date.parse("2026-08-15T12:00:00.000Z");
@@ -425,4 +426,53 @@ test("setFailoverChain accepts comma-separated slugs and auto clears it", () => 
     "c/three",
   ]);
   assert.deepEqual(setFailoverChain([]).chain, []);
+});
+
+// -- native takeover ---------------------------------------------------------
+
+test("the native takeover names one model and never enables itself", () => {
+  setFailoverEnabled(true);
+  setFailoverChain([]);
+  setNativeTakeover({ enabled: false, model: "" });
+  assert.equal(readFailoverSettings().nativeTakeover, false);
+
+  // Enabling without a destination is refused: a setting that reads as on and
+  // routes nowhere is worse than one that is plainly off.
+  assert.throws(() => setNativeTakeover({ enabled: true }), /Choose the model/);
+
+  const configured = setNativeTakeover({
+    enabled: true,
+    model: "kiro-prism/gpt-5.6-sol",
+    effort: "high",
+    cronEffort: "medium",
+  });
+  assert.equal(configured.nativeTakeover, true);
+  assert.equal(configured.nativeTakeoverModel, "kiro-prism/gpt-5.6-sol");
+  assert.equal(configured.nativeTakeoverEffort, "high");
+  assert.equal(configured.nativeTakeoverCronEffort, "medium");
+
+  // Editing the routed chain must not discard the takeover, and vice versa.
+  setFailoverChain(["kiro-prism/gpt-5.6-sol"]);
+  assert.equal(readFailoverSettings().nativeTakeoverModel, "kiro-prism/gpt-5.6-sol");
+  setFailoverEnabled(true);
+  assert.equal(readFailoverSettings().nativeTakeoverEffort, "high");
+
+  // `default` clears a level; an off-ladder one is refused.
+  assert.equal(setNativeTakeover({ effort: "default" }).nativeTakeoverEffort, undefined);
+  assert.throws(() => setNativeTakeover({ effort: "turbo" }), /must be one of/);
+
+  // Clearing the model stands the takeover down rather than leaving it armed.
+  const cleared = setNativeTakeover({ model: "" });
+  assert.equal(cleared.nativeTakeover, false);
+  assert.equal(cleared.nativeTakeoverModel, undefined);
+});
+
+test("failover disabled suppresses the takeover without forgetting it", () => {
+  setFailoverEnabled(true);
+  setNativeTakeover({ enabled: true, model: "kiro-prism/gpt-5.6-sol" });
+  setFailoverEnabled(false);
+  const settings = readFailoverSettings();
+  assert.equal(settings.enabled, false);
+  assert.equal(settings.nativeTakeover, true, "the choice is remembered");
+  assert.equal(settings.nativeTakeoverModel, "kiro-prism/gpt-5.6-sol");
 });
