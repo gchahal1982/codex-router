@@ -1289,7 +1289,7 @@ const server = http.createServer((request, response) => {
     // text in its message, and bodies never belong in the log. The code chain
     // is what distinguishes a dead socket from a refused connect (#171).
     console.error(
-      `[api-forwarder] request failed: ${formatErrorChain(error, { messages: false })}`,
+      `[api-forwarder] request failed: ${formatErrorChain(error, { messages: Boolean(error?.safeMessage) })}`,
     );
     if (!response.headersSent) {
       writeJson(response, status, {

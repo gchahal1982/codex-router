@@ -114,12 +114,11 @@ test("independent chat and automation defaults apply model and nested effort", a
     {
       model: "deepseek/deepseek-v4-flash",
       reasoning: { summary: "auto", effort: "high" },
-      reasoning_effort: "high",
     },
   );
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "cron" }),
-    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "medium" }, reasoning_effort: "medium" },
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "medium" } },
   );
 });
 
@@ -147,7 +146,7 @@ test("an automation effort override applies without a cron model override", asyn
   );
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "cron" }),
-    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "xhigh" }, reasoning_effort: "xhigh" },
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "xhigh" } },
   );
 });
 
@@ -189,7 +188,7 @@ test("a thread's own picker choice supersedes the global default", async () => {
   // Both threads start on the global default, effort included.
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "mine" }),
-    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" }, reasoning_effort: "high" },
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" } },
   );
 
   // The operator moves this one thread's dropdown. The router records the pin
@@ -213,7 +212,7 @@ test("a thread's own picker choice supersedes the global default", async () => {
   assert.equal(snapshot.chatModel, "kiro-prism/gpt-5.6-sol");
   assert.deepEqual(
     module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "other" }),
-    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" }, reasoning_effort: "high" },
+    { model: "kiro-prism/gpt-5.6-sol", reasoning: { effort: "high" } },
   );
 
   // Naming the default model in that thread relays it verbatim. A routed slug is
@@ -269,7 +268,6 @@ test("the ChatGPT reserve allowance passes through and never pins a thread", asy
     {
       model: "kiro-prism/claude-opus-5",
       reasoning: { effort: "high" },
-      reasoning_effort: "high",
     },
   );
 
@@ -325,25 +323,21 @@ test("a routed model is never moved onto native ChatGPT by a default", async () 
   assert.equal(module.refreshModelSyncFromCodex().pinnedThreadCount, 1);
 });
 
-test("the flat reasoning_effort field is never sent to native ChatGPT", async () => {
+test("the flat reasoning_effort field is never sent at all", async () => {
   resetFixture();
   writeDesktopState(stateFile, [{ model: "gpt-5.6-sol" }]);
   setThreadModel("fresh", "gpt-5.6-sol");
   module.setModelSyncEnabled(true);
   module.setModelSyncEfforts({ chatEffort: "medium" });
 
-  // ChatGPT's endpoint answers `{"detail":"Unsupported parameter:
-  // reasoning_effort"}` and fails the turn, so a native target gets the nested
-  // Responses field only.
-  module.setModelSyncDefaults({ chatModel: "gpt-5.6-sol" });
-  const native = module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "fresh" });
-  assert.deepEqual(native, { model: "gpt-5.6-sol", reasoning: { effort: "medium" } });
-  assert.ok(!("reasoning_effort" in native), "the flat field would fail the request");
-
-  // A routed target still needs both: LiteLLM re-derives its flat value from the
-  // nested object, so a flat-only override never reaches the provider.
-  module.setModelSyncDefaults({ chatModel: "kiro-prism/gpt-5.6-sol" });
-  const routed = module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "fresh" });
-  assert.equal(routed.reasoning_effort, "medium");
-  assert.deepEqual(routed.reasoning, { effort: "medium" });
+  // Both paths reject a request carrying the flat field beside the nested one.
+  // ChatGPT answers `{"detail":"Unsupported parameter: reasoning_effort"}`; the
+  // routed forwarder answers "Use either reasoning or reasoning_effort, not
+  // both" and derives the flat form from the nested object itself.
+  for (const target of ["gpt-5.6-sol", "kiro-prism/gpt-5.6-sol"]) {
+    module.setModelSyncDefaults({ chatModel: target });
+    const out = module.synchronizedPayload({ model: "gpt-5.6-sol" }, { threadId: "fresh" });
+    assert.deepEqual(out, { model: target, reasoning: { effort: "medium" } });
+    assert.ok(!("reasoning_effort" in out), `${target} must not receive the flat field`);
+  }
 });

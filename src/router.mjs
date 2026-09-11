@@ -3007,14 +3007,13 @@ async function buildRoutedRequest({ request, payload, route, agedInput, tokenMax
     ? subagentEffort(route.slug)
     : undefined;
   // This leaves on the Responses API, where the effort travels inside
-  // `reasoning`. A flat `reasoning_effort` is a Chat Completions field:
-  // LiteLLM's Responses bridge derives its own effort from `reasoning` whenever
-  // the client sent one -- and Codex always does -- then that derived value
-  // overwrites anything flat the router set, so a flat-only override never
-  // reaches the provider. Set both: `reasoning.effort` is what actually
-  // travels, and the flat field is what a bare chat-completions gateway reads.
+  // `reasoning`. The flat `reasoning_effort` is a Chat Completions field and is
+  // deliberately not set alongside it: an `openai-responses` provider is
+  // normalized through `normalizeOpenAIRequest`, which refuses a request
+  // carrying both ("Use either reasoning or reasoning_effort, not both") and
+  // derives the flat form from the nested object itself. Providers reached over
+  // chat completions get that same derivation in their own translation.
   if (childEffort) {
-    routed.reasoning_effort = childEffort;
     routed.reasoning = { ...(routed.reasoning || {}), effort: childEffort };
   }
   normalizeAutoToolChoice(routed, route);
@@ -3812,11 +3811,14 @@ async function handleResponses(request, response, requestUrl) {
         const effort = isAutomationThread(threadIdFromHeaders(request.headers))
           ? takeover.nativeTakeoverCronEffort || takeover.nativeTakeoverEffort
           : takeover.nativeTakeoverEffort;
+        // `reasoning.effort` only. The forwarder that serves routed traffic
+        // refuses a request carrying both this and a flat `reasoning_effort`
+        // ("Use either reasoning or reasoning_effort, not both"), and it
+        // derives the flat form itself from the nested object.
         const takeoverPayload = effort
           ? {
             ...payload,
             reasoning: { ...(payload.reasoning || {}), effort },
-            reasoning_effort: effort,
           }
           : payload;
         let moved;

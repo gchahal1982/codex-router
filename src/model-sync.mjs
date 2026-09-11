@@ -402,21 +402,16 @@ export function synchronizedPayload(payload, { bypass = false, threadId } = {}) 
   if (pinnedNow) return payload;
   const nextPayload = incomingModel === selectedModel ? payload : { ...payload, model: selectedModel };
   if (!selectedEffort || typeof nextPayload !== "object") return nextPayload;
-  // `reasoning.effort` is the Responses field and is what actually travels.
+  // The nested Responses field, and only that field, on every target.
   //
-  // The flat `reasoning_effort` beside it is a Chat Completions field, added only
-  // for a routed target: LiteLLM re-derives its own flat value from the nested
-  // object whenever the client sent one -- which Codex always does -- so a
-  // flat-only override never reaches the provider, while a bare
-  // chat-completions gateway reads nothing else.
-  //
-  // ChatGPT's own endpoint rejects the flat field outright:
-  // `{"detail":"Unsupported parameter: reasoning_effort"}`, which fails the turn
-  // rather than being ignored. So it is never sent on a native target.
-  const effortPayload = {
+  // Sending the flat `reasoning_effort` alongside it fails the turn on both
+  // paths, for different reasons. ChatGPT's endpoint answers
+  // `{"detail":"Unsupported parameter: reasoning_effort"}`, and the routed
+  // forwarder answers "Use either reasoning or reasoning_effort, not both"
+  // (`invalid_responses_request`) because it derives the flat form itself from
+  // the nested object. Neither ignores the duplicate.
+  return {
     ...nextPayload,
     reasoning: { ...(nextPayload.reasoning || {}), effort: selectedEffort },
   };
-  if (isRoutedSlug(selectedModel)) effortPayload.reasoning_effort = selectedEffort;
-  return effortPayload;
 }

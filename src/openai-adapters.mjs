@@ -6,6 +6,11 @@ function adapterError(message, code = "invalid_responses_request") {
   const error = new Error(message);
   error.status = 400;
   error.code = code;
+  // Every message here is a fixed string written in this file, so it can never
+  // carry upstream response text. The forwarder logs names and codes only to
+  // keep bodies out of the log; without this flag a rejected request records
+  // `Error (invalid_responses_request)` and never says which field was wrong.
+  error.safeMessage = true;
   return error;
 }
 
@@ -136,6 +141,17 @@ function normalizeResponseFormat(payload) {
   delete payload.response_format;
 }
 
+// Which keys an input item carries, and whether the required ones are usable
+// strings. Presence and type only: an item can hold tool output, arguments, or
+// message text, and none of that belongs in a log line.
+function describeItemKeys(item) {
+  const keys = Object.keys(item || {}).sort();
+  const detail = ["call_id", "name", "output", "id"]
+    .filter((key) => key in (item || {}))
+    .map((key) => `${key}=${item[key] === undefined ? "undefined" : typeof item[key]}`);
+  return `keys [${keys.join(", ")}]${detail.length ? ` (${detail.join(", ")})` : ""}`;
+}
+
 function normalizeResponsesRequest(payload) {
   const next = object(clone(payload), "Responses request");
   if (typeof next.model !== "string" || !next.model) throw adapterError("A Responses request requires model.");
@@ -150,7 +166,7 @@ function normalizeResponsesRequest(payload) {
     throw adapterError("Responses input must be a string or array.");
   }
   if (Array.isArray(next.input)) {
-    next.input = next.input.map((item) => {
+    next.input = next.input.map((item, index) => {
       object(item, "input item");
       if (item.type === "message" && item.content !== undefined) {
         return { ...item, content: contentToResponses(item.content) };
@@ -159,13 +175,19 @@ function normalizeResponsesRequest(payload) {
         item.type === "function_call" &&
         (typeof item.call_id !== "string" || !item.call_id || typeof item.name !== "string" || !item.name)
       ) {
-        throw adapterError("A function_call input item requires call_id and name.");
+        throw adapterError(
+          "A function_call input item requires call_id and name. " +
+            `Item ${index} has ${describeItemKeys(item)}.`,
+        );
       }
       if (
         item.type === "function_call_output" &&
         (typeof item.call_id !== "string" || !item.call_id || item.output === undefined)
       ) {
-        throw adapterError("A function_call_output input item requires call_id and output.");
+        throw adapterError(
+          "A function_call_output input item requires call_id and output. " +
+            `Item ${index} has ${describeItemKeys(item)}.`,
+        );
       }
       return clone(item);
     });
