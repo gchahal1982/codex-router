@@ -21,6 +21,10 @@ function upstreamResponseError(message, code = "invalid_responses_response") {
   return error;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function clone(value) {
   if (value === undefined) return undefined;
   try {
@@ -198,8 +202,27 @@ function normalizeResponsesRequest(payload) {
   if (Array.isArray(next.tools)) next.tools = next.tools.map(normalizeTool);
   if (next.tool_choice !== undefined) next.tool_choice = normalizeToolChoice(next.tool_choice);
   if (next.reasoning_effort !== undefined) {
-    if (next.reasoning !== undefined) throw adapterError("Use either reasoning or reasoning_effort, not both.");
-    next.reasoning = { effort: next.reasoning_effort };
+    // Both forms can legitimately arrive together. LiteLLM sits between the
+    // router and this boundary and derives a flat `reasoning_effort` from the
+    // nested object whenever the client sent one -- so a request the router
+    // wrote with `reasoning.effort` alone reaches here carrying both, and
+    // rejecting the pair failed the turn over a duplicate this function was
+    // about to collapse anyway.
+    //
+    // Reconcile instead: the nested Responses field wins because it is the one
+    // the caller set, and a disagreement is worth naming rather than silently
+    // resolving.
+    const nestedEffort = isPlainObject(next.reasoning) ? next.reasoning.effort : undefined;
+    if (nestedEffort !== undefined && nestedEffort !== next.reasoning_effort) {
+      throw adapterError(
+        `reasoning.effort (${String(nestedEffort)}) and reasoning_effort ` +
+          `(${String(next.reasoning_effort)}) must not disagree.`,
+      );
+    }
+    if (next.reasoning === undefined) next.reasoning = { effort: next.reasoning_effort };
+    else if (nestedEffort === undefined) {
+      next.reasoning = { ...next.reasoning, effort: next.reasoning_effort };
+    }
     delete next.reasoning_effort;
   }
   if (next.max_tokens !== undefined) {

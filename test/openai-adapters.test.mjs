@@ -238,3 +238,61 @@ test("Responses JSON transform rejects malformed and invalid upstream bodies", a
       /invalid output array/.test(error.message),
   );
 });
+
+test("both reasoning forms are reconciled rather than refused", () => {
+  // LiteLLM sits between the router and this boundary and derives a flat
+  // `reasoning_effort` from the nested object whenever the client sent one. A
+  // request the router wrote with `reasoning.effort` alone therefore arrives
+  // carrying both, and refusing the pair failed every long conversation at the
+  // compaction boundary with `invalid_responses_request`.
+  const agreeing = normalizeOpenAIRequest({
+    model: "gpt-5.6-sol",
+    input: "hi",
+    reasoning: { effort: "medium", summary: "auto" },
+    reasoning_effort: "medium",
+  });
+  assert.deepEqual(agreeing.reasoning, { effort: "medium", summary: "auto" });
+  assert.ok(!("reasoning_effort" in agreeing), "the flat alias is collapsed away");
+
+  // A nested object without an effort still adopts the flat value.
+  const adopted = normalizeOpenAIRequest({
+    model: "gpt-5.6-sol",
+    input: "hi",
+    reasoning: { summary: "auto" },
+    reasoning_effort: "high",
+  });
+  assert.deepEqual(adopted.reasoning, { summary: "auto", effort: "high" });
+
+  // Genuine disagreement is still worth naming rather than silently resolving.
+  assert.throws(
+    () => normalizeOpenAIRequest({
+      model: "gpt-5.6-sol",
+      input: "hi",
+      reasoning: { effort: "low" },
+      reasoning_effort: "high",
+    }),
+    /must not disagree/,
+  );
+});
+
+test("a rejected input item names its position without leaking content", () => {
+  // The forwarder logs names and codes only to keep upstream bodies out of the
+  // log, which left every rejection reading `Error (invalid_responses_request)`
+  // with no indication of which item was wrong.
+  assert.throws(
+    () => normalizeOpenAIRequest({
+      model: "gpt-5.6-sol",
+      tools: [],
+      input: [
+        { type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] },
+        { type: "function_call", name: "shell", arguments: '{"cmd":"secret-value"}' },
+      ],
+    }),
+    (error) => {
+      assert.match(error.message, /Item 1 has keys \[arguments, name, type\]/);
+      assert.ok(!/secret-value/.test(error.message), "arguments never enter the message");
+      assert.equal(error.safeMessage, true, "flagged so the forwarder may log it");
+      return true;
+    },
+  );
+});
