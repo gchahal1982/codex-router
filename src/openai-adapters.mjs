@@ -184,14 +184,33 @@ function normalizeResponsesRequest(payload) {
             `Item ${index} has ${describeItemKeys(item)}.`,
         );
       }
-      if (
-        item.type === "function_call_output" &&
-        (typeof item.call_id !== "string" || !item.call_id || item.output === undefined)
-      ) {
-        throw adapterError(
-          "A function_call_output input item requires call_id and output. " +
-            `Item ${index} has ${describeItemKeys(item)}.`,
-        );
+      if (item.type === "function_call_output") {
+        // Codex stores a namespaced tool result as `{ id, name, namespace,
+        // output }` -- its own client shape, where the correlation lives in
+        // `id` rather than the `call_id` the Responses API names. Those items
+        // replay verbatim through compaction, and refusing them failed every
+        // long conversation that had used an MCP or namespace tool.
+        //
+        // Adopt `id` as `call_id` when it is the only correlation present.
+        // Nothing is invented: the value is the one the client already used to
+        // pair this output with its call.
+        const correlation = typeof item.call_id === "string" && item.call_id
+          ? item.call_id
+          : typeof item.id === "string" && item.id ? item.id : undefined;
+        if (correlation === undefined || item.output === undefined) {
+          throw adapterError(
+            "A function_call_output input item requires call_id and output. " +
+              `Item ${index} has ${describeItemKeys(item)}.`,
+          );
+        }
+        // `namespace` and the client passthrough are Codex-internal; a strict
+        // provider rejects unknown members on an input item.
+        const {
+          namespace: _namespace,
+          internal_chat_message_metadata_passthrough: _passthrough,
+          ...rest
+        } = item;
+        return { ...rest, call_id: correlation };
       }
       return clone(item);
     });

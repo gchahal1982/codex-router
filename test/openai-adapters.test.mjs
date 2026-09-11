@@ -296,3 +296,50 @@ test("a rejected input item names its position without leaking content", () => {
     },
   );
 });
+
+test("a namespaced tool result correlates through id when call_id is absent", () => {
+  // Codex stores a namespaced/MCP tool result as `{ id, name, namespace, output }`,
+  // its own client shape, where the correlation lives in `id`. Those items replay
+  // verbatim through compaction; refusing them failed every long conversation
+  // that had used such a tool, surfacing only as `invalid_responses_request`.
+  const output = normalizeOpenAIRequest({
+    model: "gpt-5.6-sol",
+    tools: [],
+    input: [{
+      type: "function_call_output",
+      id: "fc_9",
+      name: "read",
+      namespace: "mcp",
+      output: "file contents",
+      internal_chat_message_metadata_passthrough: { thread: "t" },
+    }],
+  });
+  const item = output.input[0];
+  assert.equal(item.call_id, "fc_9", "the client's own correlation is adopted");
+  assert.equal(item.output, "file contents");
+  assert.ok(!("namespace" in item), "Codex-internal members are dropped");
+  assert.ok(
+    !("internal_chat_message_metadata_passthrough" in item),
+    "a strict provider rejects unknown input members",
+  );
+
+  // An explicit call_id still wins over id.
+  assert.equal(
+    normalizeOpenAIRequest({
+      model: "gpt-5.6-sol",
+      tools: [],
+      input: [{ type: "function_call_output", call_id: "c1", id: "fc_9", output: "x" }],
+    }).input[0].call_id,
+    "c1",
+  );
+
+  // With no correlation at all there is nothing to adopt, so it still fails.
+  assert.throws(
+    () => normalizeOpenAIRequest({
+      model: "gpt-5.6-sol",
+      tools: [],
+      input: [{ type: "function_call_output", output: "x" }],
+    }),
+    /requires call_id and output/,
+  );
+});
