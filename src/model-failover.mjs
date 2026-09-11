@@ -92,6 +92,19 @@ export function classifyRoutedFailure({ status, bodyText, retryAfterSeconds, now
   // two vocabularies overlap.
   if (kind === "entitlement") return { swap: false };
 
+  // The local API forwarder uses this typed 400 only when it could not complete
+  // the provider hop. It is transport evidence, not a claim that the caller's
+  // request is malformed, so another enabled provider may safely try the same
+  // untouched turn. Keep ordinary 400s terminal below.
+  if (
+    code === 400 &&
+    /provider_api_proxy_error|api-provider forwarder could not complete the request/i.test(
+      String(bodyText || ""),
+    )
+  ) {
+    return { swap: true, reason: "provider_unavailable" };
+  }
+
   if (kind === "out_of_usage" || code === 402) {
     // Most providers say they are empty without saying when they refill. That
     // is not a reason to invent a window: the turn still fails over, and the

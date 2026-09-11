@@ -82,6 +82,20 @@ test("classifyRoutedFailure swaps on 402 whatever the body says", () => {
   assert.deepEqual(verdict, { swap: true, reason: "out_of_usage" });
 });
 
+test("classifyRoutedFailure swaps on the API forwarder's typed provider failure", () => {
+  const verdict = classifyRoutedFailure({
+    status: 400,
+    bodyText: JSON.stringify({
+      error: {
+        type: "provider_api_proxy_error",
+        message: "The API-provider forwarder could not complete the request.",
+      },
+    }),
+    now: NOW,
+  });
+  assert.deepEqual(verdict, { swap: true, reason: "provider_unavailable" });
+});
+
 test("classifyRoutedFailure records no window when the provider named none", () => {
   const verdict = classifyRoutedFailure({
     status: 429,

@@ -196,6 +196,7 @@ startModelSyncWatcher();
 const CODEX_THREAD_DATABASE =
   process.env.MODEL_ROUTER_CODEX_STATE_DATABASE ||
   path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "state_5.sqlite");
+const COMPACTION_MODEL = String(process.env.MODEL_ROUTER_COMPACTION_MODEL || "").trim();
 
 function internalThreadModel(request, requestedModel) {
   if (!requestedModel || requestedModel.includes("/")) return {};
@@ -3306,7 +3307,24 @@ async function handleResponses(request, response, requestUrl) {
       payload.input.at(-1)?.type === "compaction_trigger";
     requestedModel = typeof payload.model === "string" ? payload.model : "";
     const threadModel = internalThreadModel(request, requestedModel).model;
+    // ChatGPT's native backend does not expose the compact endpoint on every
+    // account/model combination. A native task may therefore use one explicit,
+    // routed compactor without changing the model that performs its business
+    // turns. This pin is machine configuration, independent of the model most
+    // recently selected in another window.
+    const configuredCompactionRoute = compactV1 || compactV2
+      ? MODEL_BY_SLUG.get(COMPACTION_MODEL)
+      : undefined;
+    const threadCompactionRoute =
+      threadModel &&
+      !threadModel.includes("/") &&
+      configuredCompactionRoute &&
+      !isNativeOpenAIRoute(configuredCompactionRoute) &&
+      readProviderSelection().includes(configuredCompactionRoute.provider)
+        ? configuredCompactionRoute
+        : undefined;
     let registeredRoute =
+      threadCompactionRoute ??
       MODEL_BY_SLUG.get(threadModel) ??
       MODEL_BY_SLUG.get(requestedModel) ??
       MODEL_BY_SLUG.get(readNativeAliases()[requestedModel]);
@@ -3322,7 +3340,7 @@ async function handleResponses(request, response, requestUrl) {
         registeredRoute = redirect;
       }
     }
-    if (registeredRoute && !isNativeOpenAIRoute(registeredRoute)) {
+    if (registeredRoute && !isNativeOpenAIRoute(registeredRoute) && !threadCompactionRoute) {
       try {
         rememberOperatorModel(registeredRoute);
       } catch {
@@ -3335,7 +3353,8 @@ async function handleResponses(request, response, requestUrl) {
     // picker in another window can strand a long-running native task at the
     // exact moment it needs to compact.
     const followed = request.headers["x-openai-subagent"] ||
-      (!threadModel && (compactV1 || compactV2 || requestedModel === "gpt-reserve"))
+      ((compactV1 || compactV2) && !threadCompactionRoute) ||
+      (!threadModel && requestedModel === "gpt-reserve")
       ? followOperatorModel(registeredRoute, {
           modelsBySlug: MODEL_BY_SLUG,
           enabledProviders: readProviderSelection(),

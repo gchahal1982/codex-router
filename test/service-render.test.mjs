@@ -87,6 +87,8 @@ test("background service definitions render for macOS, Linux, and Windows", () =
     assert.match(launchd, /<string>io\.github\.codex-router<\/string>/);
     assert.match(launchd, /<key>PATH<\/key>/);
     assert.match(launchd, /CODEX_ROUTER_STATE_DIR/);
+    assert.match(launchd, /MODEL_ROUTER_COMPACTION_MODEL/);
+    assert.match(launchd, /kiro-prism\/gpt-5\.6-sol/);
 
     const systemd = render("service-linux.mjs", "linux", testRoot);
     assert.match(systemd, /\[Service\]/);
@@ -97,10 +99,12 @@ test("background service definitions render for macOS, Linux, and Windows", () =
     assert.match(systemd, /MODEL_ROUTER_OAUTH_PORT=4201/);
     assert.match(systemd, /MODEL_ROUTER_PORT=4202/);
     assert.match(systemd, /MODEL_ROUTER_API_PORT=4203/);
+    assert.match(systemd, /MODEL_ROUTER_COMPACTION_MODEL=kiro-prism\/gpt-5\.6-sol/);
 
     const windows = render("service-windows.mjs", "win32", testRoot);
     assert.match(windows, /@echo off\r?\n/);
     assert.match(windows, /set "CODEX_ROUTER_STATE_DIR=/);
+    assert.match(windows, /set "MODEL_ROUTER_COMPACTION_MODEL=kiro-prism\/gpt-5\.6-sol"/);
     assert.match(windows, /litellm|start\.mjs/);
     // The Python gateway must run with UTF-8 output even when the host
     // console code page is not UTF-8 (see service-windows.mjs).

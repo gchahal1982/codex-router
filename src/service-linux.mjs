@@ -69,6 +69,8 @@ function unit() {
     MODEL_ROUTER_OAUTH_PORT: String(PORTS.oauth),
     MODEL_ROUTER_PORT: String(PORTS.router),
     MODEL_ROUTER_API_PORT: String(PORTS.api),
+    MODEL_ROUTER_COMPACTION_MODEL:
+      process.env.MODEL_ROUTER_COMPACTION_MODEL || "kiro-prism/gpt-5.6-sol",
     MODEL_ROUTER_GROK_OAUTH_PORT: String(PORTS.grokOauth),
     MODEL_ROUTER_DEVIN_CLI_PORT: String(PORTS.devinCli),
     MODEL_ROUTER_ANTIGRAVITY_OAUTH_PORT: String(PORTS.antigravityOauth),
