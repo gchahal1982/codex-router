@@ -3298,16 +3298,14 @@ async function handleResponses(request, response, requestUrl) {
     });
     const compactV1 = /\/responses\/compact$/.test(requestUrl.pathname);
     // Codex remote compaction V2 uses the ordinary Responses endpoint with a
-    // terminal trigger. Detect both forms before route selection: Codex may
-    // replace the conversation model with an internal native slug while
-    // compacting, and that internal turn must stay on the routed model.
+    // terminal trigger. Detect both forms before route selection. Compaction
+    // may replace the requested model with an internal native slug, so recover
+    // the owning thread's model before deciding where the request belongs.
     const compactV2 =
       Array.isArray(payload.input) &&
       payload.input.at(-1)?.type === "compaction_trigger";
     requestedModel = typeof payload.model === "string" ? payload.model : "";
-    const threadModel = compactV1 || compactV2
-      ? undefined
-      : internalThreadModel(request, requestedModel).model;
+    const threadModel = internalThreadModel(request, requestedModel).model;
     let registeredRoute =
       MODEL_BY_SLUG.get(threadModel) ??
       MODEL_BY_SLUG.get(requestedModel) ??
@@ -3331,13 +3329,13 @@ async function handleResponses(request, response, requestUrl) {
         // Following a remembered model still works if the hint file cannot be written.
       }
     }
-    // Delegated/background agents and internal compaction turns inherit the
-    // operator's routed model. An ordinary main-thread native slug came from
-    // an explicit picker selection and must remain on ChatGPT's native path.
+    // Delegated/background agents and threadless internal compaction turns
+    // inherit the operator's routed model. A compaction request that names an
+    // existing thread stays with that thread's model; otherwise changing the
+    // picker in another window can strand a long-running native task at the
+    // exact moment it needs to compact.
     const followed = request.headers["x-openai-subagent"] ||
-      compactV1 ||
-      compactV2 ||
-      (!threadModel && requestedModel === "gpt-reserve")
+      (!threadModel && (compactV1 || compactV2 || requestedModel === "gpt-reserve"))
       ? followOperatorModel(registeredRoute, {
           modelsBySlug: MODEL_BY_SLUG,
           enabledProviders: readProviderSelection(),
