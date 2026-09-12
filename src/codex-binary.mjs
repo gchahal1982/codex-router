@@ -50,6 +50,20 @@ export function codexCandidatePaths({
   home = os.homedir(),
   linuxDesktopRoots,
 } = {}) {
+  // On macOS, prefer a separately maintained CLI over a desktop-bundled copy.
+  // Desktop releases can lag Homebrew: catalog capture once selected
+  // ChatGPT.app's 0.146 binary ahead of Homebrew 0.154 and silently removed
+  // newer native models such as gpt-6-astra. Explicit CODEX_BIN and
+  // CODEX_INSTALL_DIR still win when an operator needs an exact build.
+  const macStandalone = platform === "darwin"
+    ? ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
+    : [];
+  const macDesktop = platform === "darwin"
+    ? [
+        "/Applications/ChatGPT.app/Contents/Resources/codex",
+        "/Applications/Codex.app/Contents/Resources/codex",
+      ]
+    : [];
   return [
     process.env.CODEX_BIN,
     process.env.CODEX_INSTALL_DIR &&
@@ -57,11 +71,10 @@ export function codexCandidatePaths({
         process.env.CODEX_INSTALL_DIR,
         platform === "win32" ? "codex.exe" : "codex",
       ),
-    "/Applications/ChatGPT.app/Contents/Resources/codex",
-    "/Applications/Codex.app/Contents/Resources/codex",
-    "/opt/homebrew/bin/codex",
+    ...macStandalone,
+    ...macDesktop,
     linuxDesktopAppBundledCodex({ platform, roots: linuxDesktopRoots }),
-    "/usr/local/bin/codex",
+    ...(platform === "darwin" ? [] : ["/usr/local/bin/codex"]),
     localAppData && path.join(localAppData, "Programs", "OpenAI", "Codex", "bin", "codex.exe"),
     localAppData && path.join(localAppData, "Programs", "Codex", "resources", "codex.exe"),
     localAppData && path.join(localAppData, "Programs", "Codex", "resources", "app", "bin", "codex.exe"),

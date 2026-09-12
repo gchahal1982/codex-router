@@ -44,6 +44,32 @@ test("keeps the first match on POSIX, where every entry is spawnable", () => {
   );
 });
 
+test("macOS prefers maintained standalone Codex before desktop-bundled copies", () => {
+  const candidates = codexCandidatePaths({ platform: "darwin", home: "/Users/test" });
+  assert.ok(
+    candidates.indexOf("/opt/homebrew/bin/codex") <
+      candidates.indexOf("/Applications/ChatGPT.app/Contents/Resources/codex"),
+  );
+  assert.ok(
+    candidates.indexOf("/usr/local/bin/codex") <
+      candidates.indexOf("/Applications/Codex.app/Contents/Resources/codex"),
+  );
+});
+
+test("an explicit Codex binary still overrides macOS standalone and desktop candidates", () => {
+  const previous = process.env.CODEX_BIN;
+  try {
+    process.env.CODEX_BIN = "/custom/codex";
+    assert.equal(
+      codexCandidatePaths({ platform: "darwin", home: "/Users/test" })[0],
+      "/custom/codex",
+    );
+  } finally {
+    if (previous === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previous;
+  }
+});
+
 test("falls back to the first entry when nothing looks spawnable", () => {
   assert.equal(preferSpawnablePath(["C:\\odd\\codex"], "win32"), "C:\\odd\\codex");
 });
