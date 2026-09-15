@@ -63,6 +63,10 @@ function safeRetryCount(value) {
   return count ? count : undefined;
 }
 
+function validTraceId(value) {
+  return typeof value === "string" && /^router-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+}
+
 export function recordUsageEvent({
   model,
   provider,
@@ -79,6 +83,10 @@ export function recordUsageEvent({
   // reports it: tokens after the first token, with the wait before it counted
   // separately as time-to-first-token.
   firstTokenMs,
+  logicalRequestId,
+  requestedModel,
+  resolvedModel,
+  returnedModel,
   inputTokens,
   billedInputTokens,
   cachedInputTokens,
@@ -176,6 +184,10 @@ export function recordUsageEvent({
     ...(safeTokenCount(firstTokenMs) !== undefined
       ? { firstTokenMs: safeTokenCount(firstTokenMs) }
       : {}),
+    ...(validTraceId(logicalRequestId) ? { logicalRequestId } : {}),
+    ...(requestedModel ? { requestedModel: safeText(requestedModel, "unknown") } : {}),
+    ...(resolvedModel ? { resolvedModel: safeText(resolvedModel, "unknown") } : {}),
+    ...(returnedModel ? { returnedModel: safeText(returnedModel, "unknown") } : {}),
     ...(streamAborted === true ? { streamAborted: true } : {}),
     ...(emptyCompletion === true ? { emptyCompletion: true } : {}),
     ...(emptyCompletionRetried === true ? { emptyCompletionRetried: true } : {}),
@@ -476,6 +488,18 @@ export function recentUsageEvents({ sinceMs = 24 * 60 * 60 * 1000, limit = 1_000
             : {}),
           ...(safeTokenCount(event.firstTokenMs) !== undefined
             ? { firstTokenMs: safeTokenCount(event.firstTokenMs) }
+            : {}),
+          ...(validTraceId(event.logicalRequestId)
+            ? { logicalRequestId: event.logicalRequestId }
+            : {}),
+          ...(event.requestedModel
+            ? { requestedModel: safeText(event.requestedModel, "unknown") }
+            : {}),
+          ...(event.resolvedModel
+            ? { resolvedModel: safeText(event.resolvedModel, "unknown") }
+            : {}),
+          ...(event.returnedModel
+            ? { returnedModel: safeText(event.returnedModel, "unknown") }
             : {}),
           ...(event.streamAborted === true ? { streamAborted: true } : {}),
           ...(event.emptyCompletion === true ? { emptyCompletion: true } : {}),

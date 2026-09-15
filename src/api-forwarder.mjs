@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import http from "node:http";
 
 import {
@@ -45,7 +46,12 @@ import {
 import { relayCommandCodeGenerate } from "./commandcode-relay.mjs";
 import { VERSION } from "./version.mjs";
 import { installStableFetchTransport } from "./fetch-transport.mjs";
+import {
+  createProviderLatencyTrace,
+  validRouterCorrelationId,
+} from "./provider-latency-trace.mjs";
 import { zaiCacheUsageTransform } from "./zai-cache-usage.mjs";
+import { ResponseUsageTransform } from "./response-usage.mjs";
 import {
   createResponsesJsonTransform,
   createResponsesStreamTransform,
@@ -952,12 +958,15 @@ function upstreamHeaders(requestHeaders, body, apiKey, provider, extraHeaders = 
 // per-thread cache key without exposing the harness's raw session identifier.
 // Keep this provider-specific: generic upstreams must never receive internal
 // router metadata, and a static fallback would collapse unrelated threads.
-function prismAffinityHeaders(provider, conversationId) {
-  if (canonicalProviderId(provider.id) !== "kiro-prism" || !conversationId) return {};
+function prismAffinityHeaders(provider, conversationId, logicalRequestId) {
+  if (canonicalProviderId(provider.id) !== "kiro-prism") return {};
   return {
-    "X-Prism-Session": conversationId,
+    ...(conversationId ? { "X-Prism-Session": conversationId } : {}),
     "X-Prism-Client": "codex-router",
     "X-Prism-Job-Type": "coding-agent",
+    ...(validRouterCorrelationId(logicalRequestId)
+      ? { "X-Prism-Parent-Request": logicalRequestId }
+      : {}),
   };
 }
 
@@ -1055,8 +1064,29 @@ async function handleRequest(request, response) {
     return;
   }
 
+  const parentRequestId = request.headers["x-codex-router-request-id"];
+  const latencyTrace = createProviderLatencyTrace({
+    logicalRequestId: validRouterCorrelationId(parentRequestId) ? parentRequestId : undefined,
+    routeClass: "api-forwarder",
+  });
+  response.once("finish", () => latencyTrace.finish({ statusCode: response.statusCode }));
+  response.once("close", () => {
+    if (!response.writableFinished) latencyTrace.finish({ statusCode: 0 });
+  });
+
   const original = await readRequestBody(request);
   const normalized = normalizeBody(original, request.headers["content-type"], route);
+  latencyTrace.setPayloadClass(
+    normalized.body.length < 4_096
+      ? "tiny"
+      : normalized.body.length < 65_536
+        ? "small"
+        : normalized.body.length < 524_288
+          ? "ordinary"
+          : "large",
+  );
+  latencyTrace.setRequestedModel(normalized.payload?.model);
+  latencyTrace.setResolvedModel(normalized.model.upstreamModel);
   // Resolved against the endpoint, not the provider: a per-model endpoint keeps
   // its credential under its own slug, so two custom models on two hosts never
   // share a key and one missing key never blocks the other model.
@@ -1064,7 +1094,11 @@ async function handleRequest(request, response) {
     ? request.headers["x-codex-router-conversation"].slice(0, 128)
     : "";
   const accountCandidates = selectProviderAccountCandidates(normalized.endpoint, conversationId);
-  const affinityHeaders = prismAffinityHeaders(normalized.provider, conversationId);
+  const affinityHeaders = prismAffinityHeaders(
+    normalized.provider,
+    conversationId,
+    request.headers["x-codex-router-request-id"],
+  );
   if (!accountCandidates.length) {
     const setup = credentialStatus(normalized.endpoint).setup;
     const credentialType = credentialLabel(normalized.endpoint);
@@ -1144,6 +1178,7 @@ async function handleRequest(request, response) {
     credential = selectedAccount.credential;
     let session;
     let target;
+    let attemptRecord;
     try {
       session = await upstreamSession(
         normalized.provider,
@@ -1153,6 +1188,14 @@ async function handleRequest(request, response) {
         normalized.endpoint,
       );
       target = `${session.baseUrl}${route}${requestUrl.search}`;
+      attemptRecord = latencyTrace.beginAttempt({
+        provider: canonicalProviderId(normalized.provider.id),
+        model: normalized.model.upstreamModel,
+        accountPseudonym: createHash("sha256")
+          .update(`${canonicalProviderId(normalized.provider.id)}:${selectedAccount.id}`)
+          .digest("hex")
+          .slice(0, 24),
+      });
       upstream = await fetch(target, {
         method: request.method,
         headers: upstreamHeaders(
@@ -1166,6 +1209,7 @@ async function handleRequest(request, response) {
         body: upstreamBody,
         signal: controller.signal,
       });
+      latencyTrace.finishAttemptRecord(attemptRecord, { response: upstream });
       // Account routing can change with plan or policy. Re-resolve and replay once
       // before any response byte reaches the caller; every other status is relayed.
       if (normalized.provider.authProfile === "github-copilot" && upstream.status === 401) {
@@ -1178,6 +1222,15 @@ async function handleRequest(request, response) {
           normalized.endpoint,
         );
         target = `${session.baseUrl}${route}${requestUrl.search}`;
+        attemptRecord = latencyTrace.beginAttempt({
+          provider: canonicalProviderId(normalized.provider.id),
+          model: normalized.model.upstreamModel,
+          kind: "credential_refresh_replay",
+          accountPseudonym: createHash("sha256")
+            .update(`${canonicalProviderId(normalized.provider.id)}:${selectedAccount.id}`)
+            .digest("hex")
+            .slice(0, 24),
+        });
         upstream = await fetch(target, {
           method: request.method,
           headers: upstreamHeaders(
@@ -1191,8 +1244,10 @@ async function handleRequest(request, response) {
           body: upstreamBody,
           signal: controller.signal,
         });
+        latencyTrace.finishAttemptRecord(attemptRecord, { response: upstream });
       }
     } catch (error) {
+      latencyTrace.finishAttemptRecord(attemptRecord, { error });
       const failure = classifyProviderAccountTransportError(error, controller.signal);
       if (!failure.recoverable || index === accountCandidates.length - 1) throw error;
       coolProviderAccount(normalized.provider, selectedAccount.id, failure.until);
@@ -1255,6 +1310,9 @@ async function handleRequest(request, response) {
     upstream.ok && upstreamContentType.toLowerCase().includes("text/event-stream");
   const responsesJson = normalized.responseAdapter === "responses" &&
     upstream.ok && upstreamContentType.toLowerCase().includes("application/json");
+  const semanticObserver = upstream.ok
+    ? new ResponseUsageTransform(upstreamContentType)
+    : undefined;
   // Prism can relay a model's private reasoning as a leading <think> block in
   // ordinary chat content. Scope the compatibility filter to that provider;
   // native v0.5.1 profiles use their own protocol-specific reasoning fields.
@@ -1262,18 +1320,27 @@ async function handleRequest(request, response) {
     route === "/chat/completions" && upstream.ok
     ? createThinkTagFilter(upstreamContentType)
     : undefined;
-  const transform = [
+  const responseTransforms = [
     responsesStream ? createResponsesStreamTransform() : undefined,
     responsesJson ? createResponsesJsonTransform() : undefined,
     zaiCacheUsageTransform(normalized.provider.id, upstreamContentType),
     prismThinkFilter,
   ].filter(Boolean);
-  const denylist = transform.length
+  const transform = [semanticObserver, ...responseTransforms].filter(Boolean);
+  const denylist = responseTransforms.length
     ? new Set([...HOP_BY_HOP_HEADERS, "content-type"])
     : undefined;
   if (responsesStream) response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   if (responsesJson) response.setHeader("Content-Type", "application/json; charset=utf-8");
   await pipeResponse(upstream, response, denylist, transform);
+  const semanticAt = semanticObserver?.firstTokenAt();
+  const frameAt = semanticObserver?.firstFrameAt();
+  if (frameAt !== undefined) latencyTrace.markFirstFrame(frameAt);
+  if (semanticAt !== undefined) latencyTrace.markSemantic(semanticAt);
+  latencyTrace.setReturnedModel(
+    semanticObserver?.returnedModel() || normalized.model.upstreamModel,
+  );
+  latencyTrace.finish({ statusCode: upstream.status });
   recordUpstreamLimits(normalized, upstream);
   if (!QUIET) {
     console.error(

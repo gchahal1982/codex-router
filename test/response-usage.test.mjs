@@ -136,6 +136,51 @@ test("captures JSON usage without changing the response", async () => {
   });
 });
 
+test("semantic timing waits for complete tool arguments", async () => {
+  const transform = new ResponseUsageTransform("text/event-stream");
+  const partial =
+    'data: {"type":"response.function_call_arguments.delta","item_id":"call_1","delta":"{\\"city\\":\\"San"}\n\n';
+  const complete =
+    'data: {"type":"response.function_call_arguments.delta","item_id":"call_1","delta":" Francisco\\"}"}\n\n';
+  transform.write(partial);
+  assert.equal(transform.firstTokenAt(), undefined);
+  transform.write(complete);
+  assert.equal(typeof transform.firstTokenAt(), "number");
+  transform.end();
+  await new Promise((resolve, reject) => {
+    transform.once("finish", resolve);
+    transform.once("error", reject);
+  });
+});
+
+test("semantic timing ignores empty deltas and captures returned model", async () => {
+  const body = [
+    'data: {"type":"response.output_text.delta","delta":""}\n\n',
+    'data: {"type":"response.output_text.delta","delta":"ready","model":"resolved-model"}\n\n',
+  ];
+  const transform = new ResponseUsageTransform("text/event-stream");
+  assert.equal(await passThrough(transform, body), body.join(""));
+  assert.equal(typeof transform.firstTokenAt(), "number");
+  assert.equal(transform.returnedModel(), "resolved-model");
+});
+
+test("chat and Anthropic streams wait for client-usable semantics", async () => {
+  const chat = new ResponseUsageTransform("text/event-stream");
+  chat.write('data: {"choices":[{"delta":{"tool_calls":[{"id":"c1","function":{"arguments":"{\\"x\\":"}}]}}]}\n\n');
+  assert.equal(chat.firstTokenAt(), undefined);
+  chat.write('data: {"choices":[{"delta":{"tool_calls":[{"id":"c1","function":{"arguments":"1}"}}]}}]}\n\n');
+  assert.equal(typeof chat.firstTokenAt(), "number");
+  chat.end();
+
+  const anthropic = new ResponseUsageTransform("text/event-stream");
+  anthropic.write('data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use"}}\n\n');
+  anthropic.write('data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"x\\":"}}\n\n');
+  assert.equal(anthropic.firstTokenAt(), undefined);
+  anthropic.write('data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"1}"}}\n\n');
+  assert.equal(typeof anthropic.firstTokenAt(), "number");
+  anthropic.end();
+});
+
 test("parses usage when UTF-8 text is split across response chunks", async () => {
   const body = Buffer.from(JSON.stringify({
     output: "月",

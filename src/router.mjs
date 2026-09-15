@@ -154,6 +154,7 @@ import {
 import { gatewayErrorStatus, translateGatewayError } from "./error-translation.mjs";
 import { describeTransportFailure } from "./transport-failure.mjs";
 import { recordUsageEvent } from "./usage-events.mjs";
+import { createProviderLatencyTrace } from "./provider-latency-trace.mjs";
 import {
   classifySsePrefix,
   HEADERLESS_SSE_SNIFF_BYTES,
@@ -832,12 +833,14 @@ function routedConversationId(request) {
 
 function routedHeaders(request, { jobType } = {}) {
   const conversationId = routedConversationId(request);
+  const logicalRequestId = request?.providerLatencyTrace?.logicalRequestId;
   return {
     Authorization: `Bearer ${INTERNAL_KEY}`,
     "Content-Type": "application/json",
     "Accept-Encoding": "identity",
     "User-Agent": `codex-router/${VERSION}`,
     ...(conversationId ? { "X-Codex-Router-Conversation": conversationId } : {}),
+    ...(logicalRequestId ? { "X-Codex-Router-Request-Id": logicalRequestId } : {}),
     ...(jobType ? { "X-Prism-Job-Type": jobType } : {}),
   };
 }
@@ -3552,6 +3555,8 @@ async function handleResponses(request, response, requestUrl) {
   const startedAt = Date.now();
   const controller = new AbortController();
   const activity = beginRequestActivity({ request, response, controller });
+  const latencyTrace = createProviderLatencyTrace();
+  request.providerLatencyTrace = latencyTrace;
   let clientGone = false;
   let requestedModel = "";
   let route;
@@ -3593,6 +3598,9 @@ async function handleResponses(request, response, requestUrl) {
     const exactRouteProbe = exactRouteProbeRequested(request.headers);
     const encoded = await readRequestBody(request, { signal: controller.signal });
     const body = decodeBody(encoded, request.headers["content-encoding"]);
+    latencyTrace.setPayloadClass(
+      body.length < 4_096 ? "tiny" : body.length < 65_536 ? "small" : body.length < 524_288 ? "ordinary" : "large",
+    );
     let payload = await parseBodyAsync(body);
     controller.signal.throwIfAborted();
     payload = synchronizedPayload(payload, {
@@ -3617,6 +3625,7 @@ async function handleResponses(request, response, requestUrl) {
       }
     }
     requestedModel = typeof payload.model === "string" ? payload.model : "";
+    latencyTrace.setRequestedModel(requestedModel);
     const threadModel = internalThreadModel(request, requestedModel).model;
     // ChatGPT's native backend does not expose the compact endpoint on every
     // account/model combination. A native task may therefore use one explicit,
@@ -3684,6 +3693,7 @@ async function handleResponses(request, response, requestUrl) {
     route = registeredRoute && readProviderSelection().includes(registeredRoute.provider)
       ? registeredRoute
       : undefined;
+    latencyTrace.setResolvedModel(route?.slug || requestedModel);
     if (registeredRoute && !route) {
       writeJson(response, 409, {
         error: {
@@ -3762,6 +3772,7 @@ async function handleResponses(request, response, requestUrl) {
     const adoptRoute = (nextRoute, built) => {
       failoverFrom ??= route.slug;
       route = nextRoute;
+      latencyTrace.setResolvedModel(route.slug);
       namespacesFlattened = built.namespacesFlattened;
       flattenedNamespaces = built.flattenedNamespaces;
       pendingInterrupts = built.pendingInterrupts;
@@ -3929,6 +3940,10 @@ async function handleResponses(request, response, requestUrl) {
     // all.
     let upstream;
     if (route) {
+      const callbacks = latencyTrace.fetchCallbacks({
+        provider: canonicalProviderId(route.provider),
+        model: route.slug,
+      });
       const attempt = await fetchWithRetry(
         target,
         {
@@ -3942,6 +3957,7 @@ async function handleResponses(request, response, requestUrl) {
           // error translation and Retry-After handling below; leave it exactly
           // as it was.
           retries: 0,
+          ...callbacks,
           canRetry: () => nothingRelayed(response),
           onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
         },
@@ -3970,6 +3986,7 @@ async function handleResponses(request, response, requestUrl) {
             {
               retries: undefined,
               canRetry: () => nothingRelayed(response),
+              ...latencyTrace.fetchCallbacks({ provider: "openai", model: requestedModel }),
               onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
             },
           );
@@ -4005,6 +4022,7 @@ async function handleResponses(request, response, requestUrl) {
                 {
                   retries: undefined,
                   canRetry: () => nothingRelayed(response),
+                  ...latencyTrace.fetchCallbacks({ provider: "openai", model: requestedModel }),
                   onRetry: (event) => logUpstreamRetry(event, requestedModel, requestUrl.pathname),
                 },
               );
@@ -4596,6 +4614,10 @@ async function handleResponses(request, response, requestUrl) {
       durationMs: Date.now() - startedAt,
       responseStartMs: upstreamLatencyMs,
       firstTokenMs,
+      logicalRequestId: latencyTrace.logicalRequestId,
+      requestedModel,
+      resolvedModel: route?.slug || requestedModel,
+      returnedModel: usageTransform?.returnedModel?.() || route?.slug || requestedModel,
       ...usage,
       estimatedInputTokens,
       ...toolResultAging,
@@ -4801,6 +4823,14 @@ async function handleResponses(request, response, requestUrl) {
     throw error;
   } finally {
     const status = activityStatus ?? finalStatus ?? response.statusCode;
+    const semanticAt = usageTransform?.firstTokenAt?.();
+    const frameAt = usageTransform?.firstFrameAt?.();
+    if (frameAt !== undefined) latencyTrace.markFirstFrame(frameAt);
+    if (semanticAt !== undefined) latencyTrace.markSemantic(semanticAt);
+    latencyTrace.setReturnedModel(
+      usageTransform?.returnedModel?.() || route?.slug || requestedModel,
+    );
+    latencyTrace.finish({ statusCode: status });
     if (
       continuationEvidence &&
       status >= 200 &&

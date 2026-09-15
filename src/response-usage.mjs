@@ -320,7 +320,10 @@ export class ResponseUsageTransform extends Transform {
   // first token appears, and counting that silence as generation is what makes
   // a fast model read as slow. See #192.
   #firstTokenAt;
+  #firstFrameAt;
+  #toolArguments = new Map();
   #completedResponseObserved = false;
+  #returnedModel;
 
   // `estimatedInputTokens` arrives only on routed requests large enough that a
   // reported zero cannot be true. Without it this transform observes and
@@ -520,29 +523,88 @@ export class ResponseUsageTransform extends Transform {
   }
 
   #observe(payload) {
+    this.#firstFrameAt ??= Date.now();
+    const returnedModel = payload?.response?.model ?? payload?.model;
+    if (typeof returnedModel === "string" && returnedModel.trim()) {
+      this.#returnedModel = returnedModel.trim().slice(0, 160);
+    }
     this.#noteFirstToken(payload);
     if (payload?.type === "response.completed") this.#completedResponseObserved = true;
     const usage = tokenUsageFromPayload(payload);
     if (usage) this.#usage = usage;
   }
 
-  // The first event that carries visible generated text. Reasoning summaries
-  // and tool-call argument deltas are output the model is producing, so they
-  // count too -- what must not count is the wait before any of it starts.
+  // The first client-usable semantic event. Partial tool argument fragments do
+  // not qualify until they form one complete JSON value; recording the first
+  // fragment as TTFT made a stream of incomplete syntax look usable.
   #noteFirstToken(payload) {
     if (this.#firstTokenAt !== undefined) return;
     const type = payload?.type;
-    if (typeof type !== "string") return;
+    const delta = payload?.delta;
     const producesOutput =
-      type === "response.output_text.delta" ||
-      type === "response.reasoning_summary_text.delta" ||
-      type === "response.function_call_arguments.delta" ||
-      type === "response.audio_transcript.delta";
+      (type === "response.output_text.delta" && typeof delta === "string" && delta.length > 0) ||
+      (type === "response.reasoning_summary_text.delta" && typeof delta === "string" && delta.length > 0) ||
+      (type === "response.audio_transcript.delta" && typeof delta === "string" && delta.length > 0);
+    let completeTool = false;
+    if (type === "response.function_call_arguments.delta" && typeof delta === "string") {
+      const key = String(payload.item_id ?? payload.call_id ?? payload.output_index ?? "default");
+      const value = `${this.#toolArguments.get(key) || ""}${delta}`;
+      this.#toolArguments.set(key, value);
+      try {
+        const parsed = JSON.parse(value);
+        completeTool = parsed !== null && typeof parsed === "object";
+      } catch {
+        // A partial argument stream is progress, not client-usable output.
+      }
+    }
     // Chat-completions bridges stream choices[].delta instead of typed events.
     const chatDelta = payload?.choices?.[0]?.delta;
     const chatProducesOutput =
       typeof chatDelta?.content === "string" && chatDelta.content.length > 0;
-    if (producesOutput || chatProducesOutput) this.#firstTokenAt = Date.now();
+    let chatCompleteTool = false;
+    for (const [index, toolCall] of (chatDelta?.tool_calls || []).entries()) {
+      const fragment = toolCall?.function?.arguments;
+      if (typeof fragment !== "string") continue;
+      const key = `chat:${toolCall.index ?? index}`;
+      const value = `${this.#toolArguments.get(key) || ""}${fragment}`;
+      this.#toolArguments.set(key, value);
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed !== null && typeof parsed === "object") chatCompleteTool = true;
+      } catch {
+        // Wait until the provider has produced an executable tool payload.
+      }
+    }
+    const anthropicDelta = payload?.delta;
+    const anthropicText =
+      type === "content_block_delta" &&
+      anthropicDelta?.type === "text_delta" &&
+      typeof anthropicDelta.text === "string" &&
+      anthropicDelta.text.length > 0;
+    let anthropicCompleteTool = false;
+    if (
+      type === "content_block_delta" &&
+      anthropicDelta?.type === "input_json_delta" &&
+      typeof anthropicDelta.partial_json === "string"
+    ) {
+      const key = `anthropic:${payload.index ?? "default"}`;
+      const value = `${this.#toolArguments.get(key) || ""}${anthropicDelta.partial_json}`;
+      this.#toolArguments.set(key, value);
+      try {
+        const parsed = JSON.parse(value);
+        anthropicCompleteTool = parsed !== null && typeof parsed === "object";
+      } catch {
+        // Partial Anthropic input JSON remains progress-only.
+      }
+    }
+    if (
+      producesOutput ||
+      completeTool ||
+      chatProducesOutput ||
+      chatCompleteTool ||
+      anthropicText ||
+      anthropicCompleteTool
+    ) this.#firstTokenAt = Date.now();
   }
 
   // Epoch milliseconds of the first generated token, or undefined when the
@@ -551,7 +613,15 @@ export class ResponseUsageTransform extends Transform {
     return this.#firstTokenAt;
   }
 
+  firstFrameAt() {
+    return this.#firstFrameAt;
+  }
+
   completedResponseObserved() {
     return this.#completedResponseObserved;
+  }
+
+  returnedModel() {
+    return this.#returnedModel;
   }
 }

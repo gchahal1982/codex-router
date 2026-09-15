@@ -229,12 +229,14 @@ test("the API forwarder gives Kiro Prism a stable opaque harness session", async
   assert.equal(child.exitCode, null, errors);
   assert.equal(ready, true, `Forwarder did not become ready.\n${errors}`);
 
+  const correlationId = "router-11111111-2222-4333-8444-555555555555";
   const call = () => fetch(`http://127.0.0.1:${port}/v1/responses`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${internalKey}`,
       "Content-Type": "application/json",
       "X-Codex-Router-Conversation": "opaque-thread-hash",
+      "X-Codex-Router-Request-Id": correlationId,
     },
     body: JSON.stringify({
       model: "kiro-prism-gpt-5-6-sol",
@@ -251,6 +253,8 @@ test("the API forwarder gives Kiro Prism a stable opaque harness session", async
     assert.equal(headers["x-prism-session"], "opaque-thread-hash");
     assert.equal(headers["x-prism-client"], "codex-router");
     assert.equal(headers["x-prism-job-type"], "coding-agent");
+    assert.equal(headers["x-prism-parent-request"], correlationId);
     assert.equal(headers["x-codex-router-conversation"], undefined);
+    assert.equal(headers["x-codex-router-request-id"], undefined);
   }
 });

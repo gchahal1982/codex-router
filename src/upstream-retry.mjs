@@ -169,6 +169,8 @@ export async function fetchWithRetry(target, init = {}, options = {}) {
     signal = init.signal,
     canRetry,
     onRetry,
+    onAttemptStart,
+    onAttemptFinish,
     fetchImpl = fetch,
     sleepImpl = sleep,
     now = Date.now,
@@ -176,13 +178,16 @@ export async function fetchWithRetry(target, init = {}, options = {}) {
   const startedAt = now();
   let attempt = 0;
   for (;;) {
+    const attemptNumber = attempt + 1;
     let response;
     let failure;
+    onAttemptStart?.({ attempt: attemptNumber });
     try {
       response = await fetchImpl(target, init);
     } catch (error) {
       failure = error;
     }
+    onAttemptFinish?.({ attempt: attemptNumber, response, error: failure });
     if (attempt >= retries) return settle(response, failure, attempt);
     const retryable = failure
       ? isRetryableTransportError(failure)
